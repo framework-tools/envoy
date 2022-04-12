@@ -1,4 +1,4 @@
-<h1 align="center">Tide</h1>
+<h1 align="center">Envoy</h1>
 <div align="center">
  <strong>
    Serve the web
