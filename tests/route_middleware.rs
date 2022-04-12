@@ -18,7 +18,7 @@ impl<State: Clone + Send + Sync + 'static> Middleware<State> for TestMiddleware 
     async fn handle(
         &self,
         req: tide::Request<State>,
-        next: tide::Next<'_, State>,
+        next: tide::Next<State>,
     ) -> tide::Result<tide::Response> {
         let mut res = next.run(req).await;
         res.insert_header(self.0.clone(), self.1);

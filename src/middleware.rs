@@ -1,18 +1,18 @@
 //! Middleware types.
 
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use crate::endpoint::DynEndpoint;
 use crate::{Request, Response};
 use async_trait::async_trait;
 use std::future::Future;
-use std::pin::Pin;
 
 /// Middleware that wraps around the remaining middleware chain.
 #[async_trait]
 pub trait Middleware<State>: Send + Sync + 'static {
     /// Asynchronously handle the request, and return a response.
-    async fn handle(&self, request: Request<State>, next: Next<'_, State>) -> crate::Result;
+    async fn handle(&self, request: Request<State>, next: Next<State>) -> crate::Result;
 
     /// Set the middleware's name. By default it uses the type signature.
     fn name(&self) -> &str {
@@ -20,41 +20,63 @@ pub trait Middleware<State>: Send + Sync + 'static {
     }
 }
 
+impl<State> Debug for dyn Middleware<State> where State: Debug {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "dyn {:?}<{:?}>", std::any::type_name::<Self>(), std::any::type_name::<State>())
+    }
+}
+
+
 #[async_trait]
-impl<State, F> Middleware<State> for F
+impl<State, F, Fut> Middleware<State> for F
 where
     State: Clone + Send + Sync + 'static,
-    F: Send
-        + Sync
-        + 'static
-        + for<'a> Fn(
-            Request<State>,
-            Next<'a, State>,
-        ) -> Pin<Box<dyn Future<Output = crate::Result> + 'a + Send>>,
+    Fut: Future<Output = crate::Result> + Send,
+    F: Send + Sync + 'static + Fn(
+        Request<State>,
+        Next<State>,
+    ) -> Fut,
 {
-    async fn handle(&self, req: Request<State>, next: Next<'_, State>) -> crate::Result {
+    async fn handle(&self, req: Request<State>, next: Next<State>) -> crate::Result {
         (self)(req, next).await
     }
 }
 
 /// The remainder of a middleware chain, including the endpoint.
-#[allow(missing_debug_implementations)]
-pub struct Next<'a, State> {
-    pub(crate) endpoint: &'a DynEndpoint<State>,
-    pub(crate) next_middleware: &'a [Arc<dyn Middleware<State>>],
+#[derive(Debug)]
+pub struct Next<State> {
+    endpoint: Arc<DynEndpoint<State>>,
+    middleware: Arc<Vec<Arc<dyn Middleware<State>>>>,
+    current_index: usize,
 }
 
-impl<State: Clone + Send + Sync + 'static> Next<'_, State> {
+impl<State: Clone + Send + Sync + 'static> Next<State> {
+
+    /// Create a new Next instance.
+    pub fn new(
+        endpoint: Arc<DynEndpoint<State>>,
+        middleware: Arc<Vec<Arc<dyn Middleware<State>>>>,
+    ) -> Next<State> {
+        Next {
+            endpoint,
+            middleware,
+            current_index: 0,
+        }
+    }
+
     /// Asynchronously execute the remaining middleware chain.
     pub async fn run(mut self, req: Request<State>) -> Response {
-        if let Some((current, next)) = self.next_middleware.split_first() {
-            self.next_middleware = next;
-            match current.handle(req, self).await {
+        let current_index = self.current_index; // get a copy of the current index
+        self.current_index += 1; // increment the index for the next call
+
+        match self.middleware.get(current_index) {
+            // if there is a next middleware
+            Some(current) => match current.clone().handle(req, self).await {
                 Ok(request) => request,
                 Err(err) => err.into(),
             }
-        } else {
-            match self.endpoint.call(req).await {
+            // if there is no next middleware, execute the endpoint
+            None => match self.endpoint.call(req).await {
                 Ok(request) => request,
                 Err(err) => err.into(),
             }

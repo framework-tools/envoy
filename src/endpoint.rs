@@ -1,5 +1,6 @@
-use async_std::future::Future;
-use async_std::sync::Arc;
+use std::fmt::Debug;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use http_types::Result;
 
@@ -52,12 +53,18 @@ pub trait Endpoint<State: Clone + Send + Sync + 'static>: Send + Sync + 'static 
 
 pub(crate) type DynEndpoint<State> = dyn Endpoint<State>;
 
+impl<State> Debug for DynEndpoint<State> where State: Debug {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "dyn {:?}<{:?}>", std::any::type_name::<Self>(), std::any::type_name::<State>())
+    }
+}
+
 #[async_trait]
 impl<State, F, Fut, Res> Endpoint<State> for F
 where
     State: Clone + Send + Sync + 'static,
     F: Send + Sync + 'static + Fn(Request<State>) -> Fut,
-    Fut: Future<Output = Result<Res>> + Send + 'static,
+    Fut: core::future::Future<Output = Result<Res>> + Send + 'static,
     Res: Into<Response> + 'static,
 {
     async fn call(&self, req: Request<State>) -> crate::Result {
@@ -68,8 +75,8 @@ where
 }
 
 pub(crate) struct MiddlewareEndpoint<E, State> {
-    endpoint: E,
-    middleware: Vec<Arc<dyn Middleware<State>>>,
+    endpoint: Arc<E>,
+    middleware: Arc<Vec<Arc<dyn Middleware<State>>>>,
 }
 
 impl<E: Clone, State> Clone for MiddlewareEndpoint<E, State> {
@@ -98,14 +105,14 @@ where
 {
     pub(crate) fn wrap_with_middleware(
         ep: E,
-        middleware: &[Arc<dyn Middleware<State>>],
-    ) -> Box<dyn Endpoint<State> + Send + Sync + 'static> {
+        middleware: Vec<Arc<dyn Middleware<State>>>,
+    ) -> Arc<dyn Endpoint<State> + Send + Sync + 'static> {
         if middleware.is_empty() {
-            Box::new(ep)
+            Arc::new(ep)
         } else {
-            Box::new(Self {
-                endpoint: ep,
-                middleware: middleware.to_vec(),
+            Arc::new(Self {
+                endpoint: Arc::new(ep),
+                middleware: Arc::new(middleware),
             })
         }
     }
@@ -118,10 +125,7 @@ where
     E: Endpoint<State>,
 {
     async fn call(&self, req: Request<State>) -> crate::Result {
-        let next = Next {
-            endpoint: &self.endpoint,
-            next_middleware: &self.middleware,
-        };
+        let next = Next::new(self.endpoint.clone(), self.middleware.clone());
         Ok(next.run(req).await)
     }
 }

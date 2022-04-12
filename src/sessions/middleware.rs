@@ -79,7 +79,7 @@ where
     Store: SessionStore,
     State: Clone + Send + Sync + 'static,
 {
-    async fn handle(&self, mut request: Request<State>, next: Next<'_, State>) -> crate::Result {
+    async fn handle(&self, mut request: Request<State>, next: Next<State>) -> crate::Result {
         let cookie = request.cookie(&self.cookie_name);
         let cookie_value = cookie
             .clone()

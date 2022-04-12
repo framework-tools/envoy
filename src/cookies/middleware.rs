@@ -36,7 +36,7 @@ impl CookiesMiddleware {
 
 #[async_trait]
 impl<State: Clone + Send + Sync + 'static> Middleware<State> for CookiesMiddleware {
-    async fn handle(&self, mut ctx: Request<State>, next: Next<'_, State>) -> crate::Result {
+    async fn handle(&self, mut ctx: Request<State>, next: Next<State>) -> crate::Result {
         let cookie_jar = if let Some(cookie_data) = ctx.ext::<CookieData>() {
             cookie_data.content.clone()
         } else {

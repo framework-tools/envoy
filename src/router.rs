@@ -1,5 +1,6 @@
 use routefinder::{Captures, Router as MethodRouter};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::endpoint::DynEndpoint;
 use crate::{Request, Response, StatusCode};
@@ -10,8 +11,8 @@ use crate::{Request, Response, StatusCode};
 /// by the method first allows the table itself to be more efficient.
 #[allow(missing_debug_implementations)]
 pub(crate) struct Router<State> {
-    method_map: HashMap<http_types::Method, MethodRouter<Box<DynEndpoint<State>>>>,
-    all_method_router: MethodRouter<Box<DynEndpoint<State>>>,
+    method_map: HashMap<http_types::Method, MethodRouter<Arc<DynEndpoint<State>>>>,
+    all_method_router: MethodRouter<Arc<DynEndpoint<State>>>,
 }
 
 impl<State> std::fmt::Debug for Router<State> {
@@ -24,8 +25,8 @@ impl<State> std::fmt::Debug for Router<State> {
 }
 
 /// The result of routing a URL
-pub(crate) struct Selection<'a, State> {
-    pub(crate) endpoint: &'a DynEndpoint<State>,
+pub(crate) struct Selection<State> {
+    pub(crate) endpoint: Arc<DynEndpoint<State>>,
     pub(crate) params: Captures<'static, 'static>,
 }
 
@@ -41,7 +42,7 @@ impl<State: Clone + Send + Sync + 'static> Router<State> {
         &mut self,
         path: &str,
         method: http_types::Method,
-        ep: Box<DynEndpoint<State>>,
+        ep: Arc<DynEndpoint<State>>,
     ) {
         self.method_map
             .entry(method)
@@ -50,23 +51,23 @@ impl<State: Clone + Send + Sync + 'static> Router<State> {
             .unwrap()
     }
 
-    pub(crate) fn add_all(&mut self, path: &str, ep: Box<DynEndpoint<State>>) {
+    pub(crate) fn add_all(&mut self, path: &str, ep: Arc<DynEndpoint<State>>) {
         self.all_method_router.add(path, ep).unwrap()
     }
 
-    pub(crate) fn route(&self, path: &str, method: http_types::Method) -> Selection<'_, State> {
+    pub(crate) fn route(&self, path: &str, method: http_types::Method) -> Selection<State> {
         if let Some(m) = self
             .method_map
             .get(&method)
             .and_then(|r| r.best_match(path))
         {
             Selection {
-                endpoint: m.handler(),
+                endpoint: m.handler().clone(),
                 params: m.captures().into_owned(),
             }
         } else if let Some(m) = self.all_method_router.best_match(path) {
             Selection {
-                endpoint: m.handler(),
+                endpoint: m.handler().clone(),
                 params: m.captures().into_owned(),
             }
         } else if method == http_types::Method::Head {
@@ -83,12 +84,12 @@ impl<State: Clone + Send + Sync + 'static> Router<State> {
             // If this `path` can be handled by a callback registered with a different HTTP method
             // should return 405 Method Not Allowed
             Selection {
-                endpoint: &method_not_allowed,
+                endpoint: Arc::new(method_not_allowed),
                 params: Captures::default(),
             }
         } else {
             Selection {
-                endpoint: &not_found_endpoint,
+                endpoint: Arc::new(not_found_endpoint),
                 params: Captures::default(),
             }
         }

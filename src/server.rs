@@ -293,10 +293,7 @@ where
         let route_params = vec![params];
         let req = Request::new(state, req, route_params);
 
-        let next = Next {
-            endpoint,
-            next_middleware: &middleware,
-        };
+        let next = Next::new(endpoint, middleware);
 
         let res = next.run(req).await;
         let res: http_types::Response = res.into();
@@ -355,10 +352,7 @@ impl<State: Clone + Sync + Send + 'static, InnerState: Clone + Sync + Send + 'st
         route_params.push(params);
         let req = Request::new(state, req, route_params);
 
-        let next = Next {
-            endpoint,
-            next_middleware: &middleware,
-        };
+        let next = Next::new(endpoint, middleware);
 
         Ok(next.run(req).await)
     }

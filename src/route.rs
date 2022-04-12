@@ -188,13 +188,13 @@ impl<'a, State: Clone + Send + Sync + 'static> Route<'a, State> {
             wildcard.router.add(
                 &wildcard.path,
                 method,
-                MiddlewareEndpoint::wrap_with_middleware(ep, &wildcard.middleware),
+                MiddlewareEndpoint::wrap_with_middleware(ep, wildcard.middleware),
             );
         } else {
             self.router.add(
                 &self.path,
                 method,
-                MiddlewareEndpoint::wrap_with_middleware(ep, &self.middleware),
+                MiddlewareEndpoint::wrap_with_middleware(ep, self.middleware.clone()),
             );
         }
         self
@@ -209,12 +209,12 @@ impl<'a, State: Clone + Send + Sync + 'static> Route<'a, State> {
             let wildcard = self.at("*");
             wildcard.router.add_all(
                 &wildcard.path,
-                MiddlewareEndpoint::wrap_with_middleware(ep, &wildcard.middleware),
+                MiddlewareEndpoint::wrap_with_middleware(ep, wildcard.middleware),
             );
         } else {
             self.router.add_all(
                 &self.path,
-                MiddlewareEndpoint::wrap_with_middleware(ep, &self.middleware),
+                MiddlewareEndpoint::wrap_with_middleware(ep, self.middleware.clone()),
             );
         }
         self

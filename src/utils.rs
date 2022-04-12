@@ -31,7 +31,7 @@ where
     F: Fn(Request<State>) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Request<State>> + Send + Sync + 'static,
 {
-    async fn handle(&self, request: Request<State>, next: Next<'_, State>) -> crate::Result {
+    async fn handle(&self, request: Request<State>, next: Next<State>) -> crate::Result {
         let request = (self.0)(request).await;
         Ok(next.run(request).await)
     }
@@ -65,7 +65,7 @@ where
     F: Fn(Response) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = crate::Result> + Send + Sync + 'static,
 {
-    async fn handle(&self, request: Request<State>, next: Next<'_, State>) -> crate::Result {
+    async fn handle(&self, request: Request<State>, next: Next<State>) -> crate::Result {
         let response = next.run(request).await;
         (self.0)(response).await
     }
