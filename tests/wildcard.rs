@@ -2,35 +2,35 @@ mod test_utils;
 use test_utils::ServerTestingExt;
 use envoy::{Error, StatusCode, Context};
 
-async fn add_one(req: Context<()>) -> Result<String, envoy::Error> {
-    let num: i64 = req
+async fn add_one(ctx: Context<()>) -> Result<String, envoy::Error> {
+    let num: i64 = ctx
         .param("num")?
         .parse()
         .map_err(|err| Error::new(StatusCode::BadRequest, err))?;
     Ok((num + 1).to_string())
 }
 
-async fn add_two(req: Context<()>) -> Result<String, envoy::Error> {
-    let one: i64 = req
+async fn add_two(ctx: Context<()>) -> Result<String, envoy::Error> {
+    let one: i64 = ctx
         .param("one")?
         .parse()
         .map_err(|err| Error::new(StatusCode::BadRequest, err))?;
-    let two: i64 = req
+    let two: i64 = ctx
         .param("two")?
         .parse()
         .map_err(|err| Error::new(StatusCode::BadRequest, err))?;
     Ok((one + two).to_string())
 }
 
-async fn echo_param(req: Context<()>) -> envoy::Result<envoy::Response> {
-    match req.param("param") {
+async fn echo_param(ctx: Context<()>) -> envoy::Result<envoy::Response> {
+    match ctx.param("param") {
         Ok(path) => Ok(path.into()),
         Err(_) => Ok(StatusCode::NotFound.into()),
     }
 }
 
-async fn echo_wildcard(req: Context<()>) -> envoy::Result<envoy::Response> {
-    match req.wildcard() {
+async fn echo_wildcard(ctx: Context<()>) -> envoy::Result<envoy::Response> {
+    match ctx.wildcard() {
         Some(path) => Ok(path.into()),
         None => Ok(StatusCode::NotFound.into()),
     }

@@ -58,12 +58,12 @@ struct RequestCount(usize);
 
 #[envoy::utils::async_trait]
 impl<State: Clone + Send + Sync + 'static> Middleware<State> for RequestCounterMiddleware {
-    async fn handle(&self, mut req: Context<State>, next: Next<State>) -> Result {
+    async fn handle(&self, mut ctx: Context<State>, next: Next<State>) -> Result {
         let count = self.requests_counted.fetch_add(1, Ordering::Relaxed);
         envoy::log::trace!("request counter", { count: count });
-        req.set_ext(RequestCount(count));
+        ctx.set_ext(RequestCount(count));
 
-        let mut res = next.run(req).await;
+        let mut res = next.run(ctx).await;
 
         res.insert_header("request-number", count.to_string());
         Ok(res)

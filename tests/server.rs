@@ -13,10 +13,10 @@ fn hello_world() -> envoy::Result<()> {
         let port = test_utils::find_port().await;
         let server = task::spawn(async move {
             let mut app = envoy::new();
-            app.at("/").get(move |mut req: Context<()>| async move {
-                assert_eq!(req.body_string().await.unwrap(), "nori".to_string());
-                assert!(req.local_addr().unwrap().contains(&port.to_string()));
-                assert!(req.peer_addr().is_some());
+            app.at("/").get(move |mut ctx: Context<()>| async move {
+                assert_eq!(ctx.body_string().await.unwrap(), "nori".to_string());
+                assert!(ctx.local_addr().unwrap().contains(&port.to_string()));
+                assert!(ctx.peer_addr().is_some());
                 Ok("says hello")
             });
             app.listen(("localhost", port)).await?;
@@ -76,8 +76,8 @@ fn json() -> envoy::Result<()> {
         let port = test_utils::find_port().await;
         let server = task::spawn(async move {
             let mut app = envoy::new();
-            app.at("/").get(|mut req: Context<()>| async move {
-                let mut counter: Counter = req.body_json().await.unwrap();
+            app.at("/").get(|mut ctx: Context<()>| async move {
+                let mut counter: Counter = ctx.body_json().await.unwrap();
                 assert_eq!(counter.count, 0);
                 counter.count = 1;
                 Body::from_json(&counter)

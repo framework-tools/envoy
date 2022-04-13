@@ -81,7 +81,7 @@ async fn main() -> envoy::Result<()> {
     Ok(())
 }
 
-async fn order_shoes(mut req: Context<()>) -> envoy::Result {
+async fn order_shoes(mut ctx: Context<()>) -> envoy::Result {
     let Animal { name, legs } = ctx.body_json().await?;
     Ok(format!("Hello, {}! I've put in an order for {} shoes", name, legs).into())
 }

@@ -3,8 +3,8 @@ use envoy::{self, Response, Result, Context};
 
 #[async_std::test]
 async fn test_missing_param() -> envoy::Result<()> {
-    async fn greet(req: Context<()>) -> Result<Response> {
-        assert_eq!(req.param("name")?, "Param \"name\" not found");
+    async fn greet(ctx: Context<()>) -> Result<Response> {
+        assert_eq!(ctx.param("name")?, "Param \"name\" not found");
         Ok(Response::new(200))
     }
 

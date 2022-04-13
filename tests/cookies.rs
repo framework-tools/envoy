@@ -14,19 +14,19 @@ async fn retrieve_cookie(ctx: Context<()>) -> envoy::Result<String> {
     ))
 }
 
-async fn insert_cookie(_req: Context<()>) -> envoy::Result {
+async fn insert_cookie(_ctx: Context<()>) -> envoy::Result {
     let mut res = Response::new(StatusCode::Ok);
     res.insert_cookie(Cookie::new(COOKIE_NAME, "NewCookieValue"));
     Ok(res)
 }
 
-async fn remove_cookie(_req: Context<()>) -> envoy::Result {
+async fn remove_cookie(_ctx: Context<()>) -> envoy::Result {
     let mut res = Response::new(StatusCode::Ok);
     res.remove_cookie(Cookie::named(COOKIE_NAME));
     Ok(res)
 }
 
-async fn set_multiple_cookie(_req: Context<()>) -> envoy::Result {
+async fn set_multiple_cookie(_ctx: Context<()>) -> envoy::Result {
     let mut res = Response::new(StatusCode::Ok);
     res.insert_cookie(Cookie::new("C1", "V1"));
     res.insert_cookie(Cookie::new("C2", "V2"));
