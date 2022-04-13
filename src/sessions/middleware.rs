@@ -3,7 +3,7 @@ use crate::http::{
     cookies::{Cookie, Key, SameSite},
     format_err,
 };
-use crate::{utils::async_trait, Middleware, Next, Request};
+use crate::{utils::async_trait, Middleware, Next};
 use std::time::Duration;
 
 use async_session::{
@@ -15,34 +15,34 @@ use async_session::{
 const BASE64_DIGEST_LEN: usize = 44;
 
 /// # Middleware to enable sessions.
-/// See [sessions](crate::sessions) for an overview of tide's approach to sessions.
+/// See [sessions](crate::sessions) for an overview of envoy's approach to sessions.
 ///
 /// ## Example
 /// ```rust
 /// # async_std::task::block_on(async {
-/// let mut app = tide::new();
+/// let mut app = envoy::new();
 ///
-/// app.with(tide::sessions::SessionMiddleware::new(
-///     tide::sessions::MemoryStore::new(),
+/// app.with(envoy::sessions::SessionMiddleware::new(
+///     envoy::sessions::MemoryStore::new(),
 ///     b"we recommend you use std::env::var(\"TIDE_SECRET\").unwrap().as_bytes() instead of a fixed value"
 /// ));
 ///
-/// app.with(tide::utils::Before(|mut request: tide::Request<()>| async move {
-///     let session = request.session_mut();
+/// app.with(envoy::utils::Before(|mut ctx: envoy::Context<()>| async move {
+///     let session = ctx.session_mut();
 ///     let visits: usize = session.get("visits").unwrap_or_default();
 ///     session.insert("visits", visits + 1).unwrap();
-///     request
+///     ctx
 /// }));
 ///
-/// app.at("/").get(|req: tide::Request<()>| async move {
+/// app.at("/").get(|req: envoy::Context<()>| async move {
 ///     let visits: usize = req.session().get("visits").unwrap();
 ///     Ok(format!("you have visited this website {} times", visits))
 /// });
 ///
 /// app.at("/reset")
-///     .get(|mut req: tide::Request<()>| async move {
+///     .get(|mut req: envoy::Context<()>| async move {
 ///         req.session_mut().destroy();
-///         Ok(tide::Redirect::new("/"))
+///         Ok(envoy::Redirect::new("/"))
 ///      });
 /// # })
 /// ```
@@ -79,8 +79,8 @@ where
     Store: SessionStore,
     State: Clone + Send + Sync + 'static,
 {
-    async fn handle(&self, mut request: Request<State>, next: Next<State>) -> crate::Result {
-        let cookie = request.cookie(&self.cookie_name);
+    async fn handle(&self, mut ctx: crate::Context<State>, next: Next<State>) -> crate::Result {
+        let cookie = ctx.cookie(&self.cookie_name);
         let cookie_value = cookie
             .clone()
             .and_then(|cookie| self.verify_signature(cookie.value()).ok());
@@ -91,10 +91,10 @@ where
             session.expire_in(ttl);
         }
 
-        let secure_cookie = request.url().scheme() == "https";
-        request.set_ext(session.clone());
+        let secure_cookie = ctx.req.url().scheme() == "https";
+        ctx.set_ext(session.clone());
 
-        let mut response = next.run(request).await;
+        let mut response = next.run(ctx).await;
 
         if session.is_destroyed() {
             if let Err(e) = self.store.destroy_session(session).await {
@@ -138,7 +138,7 @@ impl<Store: SessionStore> SessionMiddleware<Store> {
     ///
     /// The defaults for SessionMiddleware are:
     /// * cookie path: "/"
-    /// * cookie name: "tide.sid"
+    /// * cookie name: "envoy.sid"
     /// * session ttl: one day
     /// * same site: strict
     /// * save unchanged: enabled
@@ -151,10 +151,10 @@ impl<Store: SessionStore> SessionMiddleware<Store> {
     /// security:
     ///
     /// ```rust
-    /// # use tide::http::cookies::SameSite;
+    /// # use envoy::http::cookies::SameSite;
     /// # use std::time::Duration;
-    /// # use tide::sessions::{SessionMiddleware, MemoryStore};
-    /// let mut app = tide::new();
+    /// # use envoy::sessions::{SessionMiddleware, MemoryStore};
+    /// let mut app = envoy::new();
     /// app.with(
     ///     SessionMiddleware::new(MemoryStore::new(), b"please do not hardcode your secret")
     ///         .with_cookie_name("custom.cookie.name")
@@ -170,7 +170,7 @@ impl<Store: SessionStore> SessionMiddleware<Store> {
             store,
             save_unchanged: true,
             cookie_path: "/".into(),
-            cookie_name: "tide.sid".into(),
+            cookie_name: "envoy.sid".into(),
             cookie_domain: None,
             same_site_policy: SameSite::Lax,
             session_ttl: Some(Duration::from_secs(24 * 60 * 60)),
@@ -197,9 +197,9 @@ impl<Store: SessionStore> SessionMiddleware<Store> {
 
     /// Sets the name of the cookie that the session is stored with or in.
     ///
-    /// If you are running multiple tide applications on the same
+    /// If you are running multiple envoy applications on the same
     /// domain, you will need different values for each
-    /// application. The default value is "tide.sid"
+    /// application. The default value is "envoy.sid"
     pub fn with_cookie_name(mut self, cookie_name: impl AsRef<str>) -> Self {
         self.cookie_name = cookie_name.as_ref().to_owned();
         self

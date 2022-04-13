@@ -1,9 +1,9 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use tide::http::mime;
-use tide::utils::{After, Before};
-use tide::{Middleware, Next, Request, Response, Result, StatusCode};
+use envoy::http::mime;
+use envoy::utils::{After, Before};
+use envoy::{Middleware, Next, Response, Result, StatusCode, Context};
 
 #[derive(Debug)]
 struct User {
@@ -24,13 +24,13 @@ impl UserDatabase {
 // application state. Because it depends on a specific request state,
 // it would likely be closely tied to a specific application
 async fn user_loader<'a>(
-    mut request: Request<UserDatabase>,
+    mut ctx: Context<UserDatabase>,
     next: Next<UserDatabase>,
 ) -> Result {
-    if let Some(user) = request.state().find_user().await {
-        tide::log::trace!("user loaded", {user: user.name});
-        request.set_ext(user);
-        Ok(next.run(request).await)
+    if let Some(user) = ctx.state().find_user().await {
+        envoy::log::trace!("user loaded", {user: user.name});
+        ctx.set_ext(user);
+        Ok(next.run(ctx).await)
     // this middleware only needs to run before the endpoint, so
     // it just passes through the result of Next
     } else {
@@ -56,11 +56,11 @@ impl RequestCounterMiddleware {
 
 struct RequestCount(usize);
 
-#[tide::utils::async_trait]
+#[envoy::utils::async_trait]
 impl<State: Clone + Send + Sync + 'static> Middleware<State> for RequestCounterMiddleware {
-    async fn handle(&self, mut req: Request<State>, next: Next<State>) -> Result {
+    async fn handle(&self, mut req: Context<State>, next: Next<State>) -> Result {
         let count = self.requests_counted.fetch_add(1, Ordering::Relaxed);
-        tide::log::trace!("request counter", { count: count });
+        envoy::log::trace!("request counter", { count: count });
         req.set_ext(RequestCount(count));
 
         let mut res = next.run(req).await;
@@ -87,8 +87,8 @@ const INTERNAL_SERVER_ERROR_HTML_PAGE: &str = "<html><body>
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    tide::log::start();
-    let mut app = tide::with_state(UserDatabase::default());
+    envoy::log::start();
+    let mut app = envoy::with_state(UserDatabase::default());
 
     app.with(After(|response: Response| async move {
         let response = match response.status() {
@@ -110,14 +110,14 @@ async fn main() -> Result<()> {
 
     app.with(user_loader);
     app.with(RequestCounterMiddleware::new(0));
-    app.with(Before(|mut request: Request<UserDatabase>| async move {
+    app.with(Before(|mut request: Context<UserDatabase>| async move {
         request.set_ext(std::time::Instant::now());
         request
     }));
 
-    app.at("/").get(|req: Request<_>| async move {
-        let count: &RequestCount = req.ext().unwrap();
-        let user: &User = req.ext().unwrap();
+    app.at("/").get(|ctx: Context<_>| async move {
+        let count: &RequestCount = ctx.ext().unwrap();
+        let user: &User = ctx.ext().unwrap();
 
         Ok(format!(
             "Hello {}, this was request number {}!",

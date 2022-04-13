@@ -1,12 +1,12 @@
 use std::io::ErrorKind;
 
-use tide::utils::After;
-use tide::{Body, Request, Response, Result, StatusCode};
+use envoy::utils::After;
+use envoy::{Body, Response, Result, StatusCode, Context};
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    tide::log::start();
-    let mut app = tide::new();
+    envoy::log::start();
+    let mut app = envoy::new();
 
     app.with(After(|mut res: Response| async {
         if let Some(err) = res.downcast_error::<async_std::io::Error>() {
@@ -22,7 +22,7 @@ async fn main() -> Result<()> {
     }));
 
     app.at("/")
-        .get(|_req: Request<_>| async { Ok(Body::from_file("./does-not-exist").await?) });
+        .get(|_req: Context<_>| async { Ok(Body::from_file("./does-not-exist").await?) });
 
     app.listen("127.0.0.1:8080").await?;
 

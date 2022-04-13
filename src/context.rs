@@ -1,47 +1,62 @@
-use async_std::io::{self, prelude::*};
-use async_std::task::{Context, Poll};
 use routefinder::Captures;
-
-use std::ops::Index;
-use std::pin::Pin;
+use crate::Response;
+use crate::http::headers::{HeaderName, HeaderValues, ToHeaderValues};
+use crate::http::{headers, Body, Method, Mime, StatusCode, Url, Version};
+use crate::http::format_err;
 
 #[cfg(feature = "cookies")]
 use crate::cookies::CookieData;
 #[cfg(feature = "cookies")]
 use crate::http::cookies::Cookie;
-use crate::http::format_err;
-use crate::http::headers::{self, HeaderName, HeaderValues, ToHeaderValues};
-use crate::http::{self, Body, Method, Mime, StatusCode, Url, Version};
-use crate::Response;
 
-pin_project_lite::pin_project! {
-    /// An HTTP request.
-    ///
-    /// The `Request` gives endpoints access to basic information about the incoming
-    /// request, route parameters, and various ways of accessing the request's body.
-    ///
-    /// Requests also provide *extensions*, a type map primarily used for low-level
-    /// communication between middleware and endpoints.
-    #[derive(Debug)]
-    pub struct Request<State> {
-        pub(crate) state: State,
-        #[pin]
-        pub(crate) req: http::Request,
-        pub(crate) route_params: Vec<Captures<'static, 'static>>,
-    }
+/// ## The context of a request.
+///
+/// This is a wrapper around a [crate::http::Request] and a [crate::http::Response]
+/// that provides access to the request and response
+/// as well as some additional information such as the state
+/// and parameters.
+#[derive(Debug)]
+pub struct Context<State> {
+    /// The state of the request.
+    /// Use this to store stuff like database connections, etc.
+    /// or middleware state.
+    pub state: State,
+    /// The request that was made.
+    pub req: crate::http::Request,
+    /// The response that will be sent.
+    pub res: crate::http::Response,
+    /// The parsed request parameters
+    pub params: Vec<Captures<'static, 'static>>,
 }
 
-impl<State> Request<State> {
-    /// Create a new `Request`.
+
+impl<State> Context<State> {
+    /// Create a new [Context] with a [crate::http::Request].
     pub(crate) fn new(
         state: State,
-        req: http_types::Request,
-        route_params: Vec<Captures<'static, 'static>>,
+        req: crate::http::Request,
+        params: Vec<Captures<'static, 'static>>,
     ) -> Self {
         Self {
             state,
             req,
-            route_params,
+            res: crate::http::Response::new(StatusCode::Ok),
+            params,
+        }
+    }
+
+    /// Create a new [Context] with a [crate::http::Request] and a [crate::http::Response].
+    pub(crate) fn new_with_res(
+        state: State,
+        req: crate::http::Request,
+        params: Vec<Captures<'static, 'static>>,
+        res: crate::http::Response,
+    ) -> Self {
+        Self {
+            state,
+            req,
+            res,
+            params,
         }
     }
 
@@ -297,7 +312,7 @@ impl<State> Request<State> {
     /// # Ok(()) })}
     /// ```
     pub fn param(&self, key: &str) -> crate::Result<&str> {
-        self.route_params
+        self.params
             .iter()
             .rev()
             .find_map(|captures| captures.get(key))
@@ -328,7 +343,7 @@ impl<State> Request<State> {
     /// # Ok(()) })}
     /// ```
     pub fn wildcard(&self) -> Option<&str> {
-        self.route_params
+        self.params
             .iter()
             .rev()
             .find_map(|captures| captures.wildcard())
@@ -556,115 +571,34 @@ impl<State> Request<State> {
     }
 }
 
-impl<State> AsRef<http::Request> for Request<State> {
-    fn as_ref(&self) -> &http::Request {
+impl<State> AsRef<crate::http::Request> for Context<State> {
+    fn as_ref(&self) -> &crate::http::Request {
         &self.req
     }
 }
 
-impl<State> AsMut<http::Request> for Request<State> {
-    fn as_mut(&mut self) -> &mut http::Request {
+impl<State> AsMut<crate::http::Request> for Context<State> {
+    fn as_mut(&mut self) -> &mut crate::http::Request {
         &mut self.req
     }
 }
 
-impl<State> AsRef<http::Headers> for Request<State> {
-    fn as_ref(&self) -> &http::Headers {
+impl<State> AsRef<crate::http::Headers> for Context<State> {
+    fn as_ref(&self) -> &crate::http::Headers {
         self.req.as_ref()
     }
 }
 
-impl<State> AsMut<http::Headers> for Request<State> {
-    fn as_mut(&mut self) -> &mut http::Headers {
+impl<State> AsMut<crate::http::Headers> for Context<State> {
+    fn as_mut(&mut self) -> &mut crate::http::Headers {
         self.req.as_mut()
     }
 }
 
-impl<State> Read for Request<State> {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<io::Result<usize>> {
-        self.project().req.poll_read(cx, buf)
-    }
-}
-
-impl<State> From<Request<State>> for http::Request {
-    fn from(request: Request<State>) -> http::Request {
-        request.req
-    }
-}
-
-impl<State: Default> From<http_types::Request> for Request<State> {
-    fn from(request: http_types::Request) -> Request<State> {
-        Request::new(State::default(), request, vec![])
-    }
-}
-
-impl<State: Clone + Send + Sync + 'static> From<Request<State>> for Response {
-    fn from(mut request: Request<State>) -> Response {
+impl<State: Clone + Send + Sync + 'static> From<Context<State>> for Response {
+    fn from(mut request: Context<State>) -> Response {
         let mut res = Response::new(StatusCode::Ok);
         res.set_body(request.take_body());
         res
-    }
-}
-
-impl<State> IntoIterator for Request<State> {
-    type Item = (HeaderName, HeaderValues);
-    type IntoIter = http_types::headers::IntoIter;
-
-    /// Returns a iterator of references over the remaining items.
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        self.req.into_iter()
-    }
-}
-
-impl<'a, State> IntoIterator for &'a Request<State> {
-    type Item = (&'a HeaderName, &'a HeaderValues);
-    type IntoIter = http_types::headers::Iter<'a>;
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        self.req.iter()
-    }
-}
-
-impl<'a, State> IntoIterator for &'a mut Request<State> {
-    type Item = (&'a HeaderName, &'a mut HeaderValues);
-    type IntoIter = http_types::headers::IterMut<'a>;
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        self.req.iter_mut()
-    }
-}
-
-impl<State> Index<HeaderName> for Request<State> {
-    type Output = HeaderValues;
-
-    /// Returns a reference to the value corresponding to the supplied name.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the name is not present in `Request`.
-    #[inline]
-    fn index(&self, name: HeaderName) -> &HeaderValues {
-        &self.req[name]
-    }
-}
-
-impl<State> Index<&str> for Request<State> {
-    type Output = HeaderValues;
-
-    /// Returns a reference to the value corresponding to the supplied name.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the name is not present in `Request`.
-    #[inline]
-    fn index(&self, name: &str) -> &HeaderValues {
-        &self.req[name]
     }
 }

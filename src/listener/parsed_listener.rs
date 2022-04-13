@@ -11,7 +11,7 @@ use std::fmt::{self, Debug, Display, Formatter};
 /// Listener type for the string-parsing
 /// [ToListener](crate::listener::ToListener) implementations
 ///
-/// This is currently crate-visible only, and tide users are expected
+/// This is currently crate-visible only, and envoy users are expected
 /// to create these through [ToListener](crate::ToListener) conversions.
 pub enum ParsedListener<State> {
     #[cfg(unix)]

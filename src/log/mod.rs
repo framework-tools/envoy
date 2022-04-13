@@ -3,7 +3,7 @@
 //! # Examples
 //!
 //! ```no_run
-//! use tide::log;
+//! use envoy::log;
 //!
 //! log::start();
 //!

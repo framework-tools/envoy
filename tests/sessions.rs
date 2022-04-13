@@ -4,7 +4,7 @@ use test_utils::ServerTestingExt;
 use cookie::SameSite;
 use http_types::headers::SET_COOKIE;
 use std::time::Duration;
-use tide::{
+use envoy::{
     http::{cookies as cookie, headers::HeaderValue, Response},
     sessions::{MemoryStore, SessionMiddleware},
     utils::Before,
@@ -15,28 +15,28 @@ struct SessionData {
 }
 
 #[async_std::test]
-async fn test_basic_sessions() -> tide::Result<()> {
-    let mut app = tide::new();
+async fn test_basic_sessions() -> envoy::Result<()> {
+    let mut app = envoy::new();
     app.with(SessionMiddleware::new(
         MemoryStore::new(),
         b"12345678901234567890123456789012345",
     ));
 
-    app.with(Before(|mut request: tide::Request<()>| async move {
-        let visits: usize = request.session().get("visits").unwrap_or_default();
-        request.session_mut().insert("visits", visits + 1).unwrap();
-        request
+    app.with(Before(|mut ctx: envoy::Context<()>| async move {
+        let visits: usize = ctx.session().get("visits").unwrap_or_default();
+        ctx.session_mut().insert("visits", visits + 1).unwrap();
+        ctx
     }));
 
-    app.at("/").get(|req: tide::Request<()>| async move {
+    app.at("/").get(|req: envoy::Context<()>| async move {
         let visits: usize = req.session().get("visits").unwrap();
         Ok(format!("you have visited this website {} times", visits))
     });
 
     let response = app.get("/").await?;
     let cookies = Cookies::from_response(&response);
-    let cookie = &cookies["tide.sid"];
-    assert_eq!(cookie.name(), "tide.sid");
+    let cookie = &cookies["envoy.sid"];
+    assert_eq!(cookie.name(), "envoy.sid");
     assert_eq!(cookie.domain(), None);
     assert_eq!(cookie.http_only(), Some(true));
     assert_eq!(cookie.same_site(), Some(SameSite::Lax));
@@ -51,14 +51,14 @@ async fn test_basic_sessions() -> tide::Result<()> {
 
     let response = app.get("https://secure/").await?;
     let cookies = Cookies::from_response(&response);
-    let cookie = &cookies["tide.sid"];
+    let cookie = &cookies["envoy.sid"];
     assert_eq!(cookie.secure(), Some(true));
     Ok(())
 }
 
 #[async_std::test]
-async fn test_customized_sessions() -> tide::Result<()> {
-    let mut app = tide::new();
+async fn test_customized_sessions() -> envoy::Result<()> {
+    let mut app = envoy::new();
     app.with(
         SessionMiddleware::new(MemoryStore::new(), b"12345678901234567890123456789012345")
             .with_cookie_name("custom.cookie.name")
@@ -70,14 +70,14 @@ async fn test_customized_sessions() -> tide::Result<()> {
     );
 
     app.at("/").get(|_| async { Ok("/") });
-    app.at("/nested").get(|req: tide::Request<()>| async move {
+    app.at("/nested").get(|req: envoy::Context<()>| async move {
         Ok(format!(
             "/nested {}",
             req.session().get::<usize>("visits").unwrap_or_default()
         ))
     });
     app.at("/nested/incr")
-        .get(|mut req: tide::Request<()>| async move {
+        .get(|mut req: envoy::Context<()>| async move {
             let mut visits: usize = req.session().get("visits").unwrap_or_default();
             visits += 1;
             req.session_mut().insert("visits", visits)?;
@@ -96,7 +96,7 @@ async fn test_customized_sessions() -> tide::Result<()> {
     assert_eq!(response.body_string().await?, "/nested/incr 1");
 
     assert_eq!(cookies.len(), 1);
-    assert!(cookies.get("tide.sid").is_none());
+    assert!(cookies.get("envoy.sid").is_none());
     let cookie = &cookies["custom.cookie.name"];
     assert_eq!(cookie.http_only(), Some(true));
     assert_eq!(cookie.same_site(), Some(SameSite::Strict));
@@ -128,26 +128,26 @@ async fn test_customized_sessions() -> tide::Result<()> {
 }
 
 #[async_std::test]
-async fn test_session_destruction() -> tide::Result<()> {
-    let mut app = tide::new();
+async fn test_session_destruction() -> envoy::Result<()> {
+    let mut app = envoy::new();
     app.with(SessionMiddleware::new(
         MemoryStore::new(),
         b"12345678901234567890123456789012345",
     ));
 
-    app.with(Before(|mut request: tide::Request<()>| async move {
+    app.with(Before(|mut request: envoy::Context<()>| async move {
         let visits: usize = request.session().get("visits").unwrap_or_default();
         request.session_mut().insert("visits", visits + 1).unwrap();
         request
     }));
 
-    app.at("/").get(|req: tide::Request<()>| async move {
+    app.at("/").get(|req: envoy::Context<()>| async move {
         let visits: usize = req.session().get("visits").unwrap();
         Ok(format!("you have visited this website {} times", visits))
     });
 
     app.at("/logout")
-        .post(|mut req: tide::Request<()>| async move {
+        .post(|mut req: envoy::Context<()>| async move {
             req.session_mut().destroy();
             Ok(Response::new(200))
         });
@@ -160,13 +160,13 @@ async fn test_session_destruction() -> tide::Result<()> {
         .header("Cookie", &cookies)
         .await?;
     let cookies = Cookies::from_response(&second_response);
-    assert_eq!(cookies["tide.sid"].value(), "");
+    assert_eq!(cookies["envoy.sid"].value(), "");
     assert_eq!(cookies.len(), 1);
     Ok(())
 }
 
 #[derive(Debug, Clone)]
-struct Cookies(Vec<tide::http::Cookie<'static>>);
+struct Cookies(Vec<envoy::http::Cookie<'static>>);
 impl Cookies {
     fn len(&self) -> usize {
         self.0.len()
@@ -182,11 +182,11 @@ impl Cookies {
             .unwrap()
     }
 
-    fn get<'a>(&'a self, name: &str) -> Option<&'a tide::http::Cookie<'static>> {
+    fn get<'a>(&'a self, name: &str) -> Option<&'a envoy::http::Cookie<'static>> {
         self.0.iter().find(|cookie| cookie.name() == name)
     }
 }
-impl tide::http::headers::ToHeaderValues for &Cookies {
+impl envoy::http::headers::ToHeaderValues for &Cookies {
     type Iter = std::iter::Once<HeaderValue>;
     fn to_header_values(&self) -> http_types::Result<Self::Iter> {
         let value = self

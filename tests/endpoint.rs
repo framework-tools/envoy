@@ -1,13 +1,13 @@
-use tide::http::{Method, Request, Url};
-use tide::Response;
+use envoy::http::{Method, Request, Url};
+use envoy::Response;
 
 #[async_std::test]
 async fn should_accept_boxed_endpoints() {
-    fn endpoint() -> Box<dyn tide::Endpoint<()>> {
+    fn endpoint() -> Box<dyn envoy::Endpoint<()>> {
         Box::new(|_| async { Ok("hello world") })
     }
 
-    let mut app = tide::Server::new();
+    let mut app = envoy::Server::new();
     app.at("/").get(endpoint());
 
     let mut response: Response = app

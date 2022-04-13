@@ -30,8 +30,8 @@ pub(crate) use tcp_listener::TcpListener;
 #[cfg(all(unix, feature = "h1-server"))]
 pub(crate) use unix_listener::UnixListener;
 
-/// The Listener trait represents an implementation of http transport for a tide
-/// application. In order to provide a Listener to tide, you will also need to
+/// The Listener trait represents an implementation of http transport for a envoy
+/// application. In order to provide a Listener to envoy, you will also need to
 /// implement at least one [`ToListener`](crate::listener::ToListener) that
 /// outputs your Listener type.
 #[async_trait]
@@ -98,7 +98,7 @@ pub struct ListenInfo {
 impl ListenInfo {
     /// Create a new instance of `ListenInfo`.
     ///
-    /// This method should only be called when implementing a new Tide `listener`
+    /// This method should only be called when implementing a new Envoy `listener`
     /// strategy.
     pub fn new(conn_string: String, transport: String, tls: bool) -> Self {
         Self {

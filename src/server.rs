@@ -9,7 +9,7 @@ use crate::listener::{Listener, ToListener};
 use crate::log;
 use crate::middleware::{Middleware, Next};
 use crate::router::{Router, Selection};
-use crate::{Endpoint, Request, Route};
+use crate::{Endpoint, Route};
 
 /// An HTTP server.
 ///
@@ -23,7 +23,7 @@ use crate::{Endpoint, Request, Route};
 /// standard router syntax), which can then be used to register endpoints
 /// for particular HTTP request types.
 ///
-/// - Middleware extends the base Tide framework with additional request or
+/// - Middleware extends the base Envoy framework with additional request or
 /// response processing, such as compression, default headers, or logging. To
 /// add middleware to an app, use the [`Server::with`] method.
 pub struct Server<State> {
@@ -41,7 +41,7 @@ pub struct Server<State> {
 }
 
 impl Server<()> {
-    /// Create a new Tide server.
+    /// Create a new Envoy server.
     ///
     /// # Examples
     ///
@@ -49,7 +49,7 @@ impl Server<()> {
     /// # use async_std::task::block_on;
     /// # fn main() -> Result<(), std::io::Error> { block_on(async {
     /// #
-    /// let mut app = tide::new();
+    /// let mut app = envoy::new();
     /// app.at("/").get(|_| async { Ok("Hello, world!") });
     /// app.listen("127.0.0.1:8080").await?;
     /// #
@@ -71,7 +71,7 @@ impl<State> Server<State>
 where
     State: Clone + Send + Sync + 'static,
 {
-    /// Create a new Tide server with shared application scoped state.
+    /// Create a new Envoy server with shared application scoped state.
     ///
     /// Application scoped state is useful for storing items
     ///
@@ -81,7 +81,7 @@ where
     /// # use async_std::task::block_on;
     /// # fn main() -> Result<(), std::io::Error> { block_on(async {
     /// #
-    /// use tide::Request;
+    /// use envoy::Context;
     ///
     /// /// The shared application state.
     /// #[derive(Clone)]
@@ -95,9 +95,9 @@ where
     /// };
     ///
     /// // Initialize the application with state.
-    /// let mut app = tide::with_state(state);
-    /// app.at("/").get(|req: Request<State>| async move {
-    ///     Ok(format!("Hello, {}!", &req.state().name))
+    /// let mut app = envoy::with_state(state);
+    /// app.at("/").get(|ctx: Context<State>| async move {
+    ///     Ok(format!("Hello, {}!", &ctx.state().name))
     /// });
     /// app.listen("127.0.0.1:8080").await?;
     /// #
@@ -118,14 +118,14 @@ where
 
     /// Add a new route at the given `path`, relative to root.
     ///
-    /// Routing means mapping an HTTP request to an endpoint. Here Tide applies
+    /// Routing means mapping an HTTP request to an endpoint. Here Envoy applies
     /// a "table of contents" approach, which makes it easy to see the overall
     /// app structure. Endpoints are selected solely by the path and HTTP method
     /// of a request: the path determines the resource and the HTTP verb the
     /// respective endpoint of the selected resource. Example:
     ///
     /// ```rust,no_run
-    /// # let mut app = tide::Server::new();
+    /// # let mut app = envoy::Server::new();
     /// app.at("/").get(|_| async { Ok("Hello, world!") });
     /// ```
     ///
@@ -150,7 +150,7 @@ where
     /// Here are some examples omitting the HTTP verb based endpoint selection:
     ///
     /// ```rust,no_run
-    /// # let mut app = tide::Server::new();
+    /// # let mut app = envoy::Server::new();
     /// app.at("/");
     /// app.at("/hello");
     /// app.at("add_two/:num");
@@ -199,7 +199,7 @@ where
     /// # use async_std::task::block_on;
     /// # fn main() -> Result<(), std::io::Error> { block_on(async {
     /// #
-    /// let mut app = tide::new();
+    /// let mut app = envoy::new();
     /// app.at("/").get(|_| async { Ok("Hello, world!") });
     /// app.listen("127.0.0.1:8080").await?;
     /// #
@@ -232,9 +232,9 @@ where
     /// # use async_std::task::block_on;
     /// # fn main() -> Result<(), std::io::Error> { block_on(async {
     /// #
-    /// use tide::prelude::*;
+    /// use envoy::prelude::*;
     ///
-    /// let mut app = tide::new();
+    /// let mut app = envoy::new();
     /// app.at("/").get(|_| async { Ok("Hello, world!") });
     /// let mut listener = app.bind("127.0.0.1:8080").await?;
     /// for info in listener.info().iter() {
@@ -264,9 +264,9 @@ where
     /// # #[async_std::main]
     /// # async fn main() -> http_types::Result<()> {
     /// #
-    /// use tide::http::{Url, Method, Request, Response};
+    /// use envoy::http::{Url, Method, Request, Response};
     ///
-    /// let mut app = tide::new();
+    /// let mut app = envoy::new();
     /// app.at("/").get(|_| async { Ok("hello world") });
     ///
     /// let req = Request::new(Method::Get, Url::parse("https://example.com")?);
@@ -291,11 +291,11 @@ where
         let method = req.method().to_owned();
         let Selection { endpoint, params } = router.route(req.url().path(), method);
         let route_params = vec![params];
-        let req = Request::new(state, req, route_params);
+        let ctx = crate::Context::new(state, req, route_params);
 
         let next = Next::new(endpoint, middleware);
 
-        let res = next.run(req).await;
+        let res = next.run(ctx).await;
         let res: http_types::Response = res.into();
         Ok(res.into())
     }
@@ -306,8 +306,8 @@ where
     ///
     /// ```rust
     /// # #[derive(Clone)] struct SomeAppState;
-    /// let mut app = tide::with_state(SomeAppState);
-    /// let mut admin = tide::with_state(app.state().clone());
+    /// let mut app = envoy::with_state(SomeAppState);
+    /// let mut admin = envoy::with_state(app.state().clone());
     /// admin.at("/").get(|_| async { Ok("nested app with cloned state") });
     /// app.at("/").nest(admin);
     /// ```
@@ -336,12 +336,13 @@ impl<State: Clone> Clone for Server<State> {
 impl<State: Clone + Sync + Send + 'static, InnerState: Clone + Sync + Send + 'static>
     Endpoint<State> for Server<InnerState>
 {
-    async fn call(&self, req: Request<State>) -> crate::Result {
-        let Request {
+    async fn call(&self, ctx: crate::Context<State>) -> crate::Result {
+        let crate::Context {
             req,
-            mut route_params,
+            res,
+            params: mut route_params,
             ..
-        } = req;
+        } = ctx;
         let path = req.url().path().to_owned();
         let method = req.method().to_owned();
         let router = self.router.clone();
@@ -350,11 +351,11 @@ impl<State: Clone + Sync + Send + 'static, InnerState: Clone + Sync + Send + 'st
 
         let Selection { endpoint, params } = router.route(&path, method);
         route_params.push(params);
-        let req = Request::new(state, req, route_params);
+        let ctx = crate::Context::new_with_res(state, req, route_params, res);
 
         let next = Next::new(endpoint, middleware);
 
-        Ok(next.run(req).await)
+        Ok(next.run(ctx).await)
     }
 }
 
@@ -367,19 +368,19 @@ impl<State: Clone + Send + Sync + Unpin + 'static> http_client::HttpClient for S
 
 #[cfg(test)]
 mod test {
-    use crate as tide;
+    use crate as envoy;
 
     #[test]
     fn allow_nested_server_with_same_state() {
-        let inner = tide::new();
-        let mut outer = tide::new();
+        let inner = envoy::new();
+        let mut outer = envoy::new();
         outer.at("/foo").get(inner);
     }
 
     #[test]
     fn allow_nested_server_with_different_state() {
-        let inner = tide::with_state(1);
-        let mut outer = tide::new();
+        let inner = envoy::with_state(1);
+        let mut outer = envoy::new();
         outer.at("/foo").get(inner);
     }
 }

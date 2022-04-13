@@ -1,5 +1,5 @@
 use crate::response::CookieEvent;
-use crate::{Middleware, Next, Request};
+use crate::{Middleware, Next};
 use async_trait::async_trait;
 
 use crate::http::cookies::{Cookie, CookieJar, Delta};
@@ -12,11 +12,11 @@ use std::sync::{Arc, RwLock};
 /// # Examples
 ///
 /// ```
-/// # use tide::{Request, Response, StatusCode};
-/// # use tide::http::cookies::Cookie;
-/// let mut app = tide::Server::new();
-/// app.at("/get").get(|req: Request<()>| async move {
-///     Ok(req.cookie("testCookie").unwrap().value().to_string())
+/// # use envoy::{Context, Response, StatusCode};
+/// # use envoy::http::cookies::Cookie;
+/// let mut app = envoy::Server::new();
+/// app.at("/get").get(|ctx: Context<()>| async move {
+///     Ok(ctx.cookie("testCookie").unwrap().value().to_string())
 /// });
 /// app.at("/set").get(|_| async {
 ///     let mut res = Response::new(StatusCode::Ok);
@@ -36,7 +36,7 @@ impl CookiesMiddleware {
 
 #[async_trait]
 impl<State: Clone + Send + Sync + 'static> Middleware<State> for CookiesMiddleware {
-    async fn handle(&self, mut ctx: Request<State>, next: Next<State>) -> crate::Result {
+    async fn handle(&self, mut ctx: crate::Context<State>, next: Next<State>) -> crate::Result {
         let cookie_jar = if let Some(cookie_data) = ctx.ext::<CookieData>() {
             cookie_data.content.clone()
         } else {
@@ -112,8 +112,8 @@ impl LazyJar {
 }
 
 impl CookieData {
-    pub(crate) fn from_request<S>(req: &Request<S>) -> Self {
-        let jar = if let Some(cookie_headers) = req.header(&headers::COOKIE) {
+    pub(crate) fn from_request<S>(ctx: &crate::Context<S>) -> Self {
+        let jar = if let Some(cookie_headers) = ctx.req.header(&headers::COOKIE) {
             let mut jar = CookieJar::new();
             for cookie_header in cookie_headers {
                 // spec says there should be only one, so this is permissive

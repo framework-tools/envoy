@@ -15,7 +15,7 @@ use async_std::io;
 /// * `[::1]:1213` (an ipv6 [SocketAddr](std::net::SocketAddr))
 ///
 /// # Strings supported only on `cfg(unix)` platforms:
-/// * `http+unix:///var/run/tide/socket` (absolute path)
+/// * `http+unix:///var/run/envoy/socket` (absolute path)
 /// * `http+unix://socket` (relative path)
 /// * `http+unix://./socket.file` (also relative path)
 /// * `http+unix://../socket` (relative path)
@@ -27,20 +27,20 @@ use async_std::io;
 /// To bind to any number of listeners concurrently:
 /// ```rust,no_run
 /// # fn main() -> std::io::Result<()> { async_std::task::block_on(async {
-/// # let app = tide::new();
+/// # let app = envoy::new();
 /// app.listen(vec!["tcp://localhost:8000", "tcp://localhost:8001"]).await?;
 /// # Ok(()) }) }
 /// ```
 ///
 /// # Multiple socket resolution
-/// If a TCP listener resolves to multiple socket addresses, tide will
+/// If a TCP listener resolves to multiple socket addresses, envoy will
 /// bind to the first successful one. For example, on ipv4+ipv6
 /// systems, `tcp://localhost:1234` resolves both to `127.0.0.1:1234`
 /// (v4) as well as `[::1]:1234` (v6). The order that these are
 /// attempted is platform-determined. To listen on all of the addresses, use
 /// ```rust,no_run
 /// # fn main() -> std::io::Result<()> { async_std::task::block_on(async {
-/// # let app = tide::new();
+/// # let app = envoy::new();
 /// use std::net::ToSocketAddrs;
 /// app.listen("localhost:8000".to_socket_addrs()?.collect::<Vec<_>>()).await?;
 /// # Ok(()) }) }

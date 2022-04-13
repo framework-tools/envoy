@@ -1,18 +1,19 @@
 mod test_utils;
 use async_std::prelude::*;
 use async_std::task;
+use envoy::Context;
 use std::time::Duration;
 
+use envoy::Body;
 use serde::{Deserialize, Serialize};
-use tide::{Body, Request};
 
 #[test]
-fn hello_world() -> tide::Result<()> {
+fn hello_world() -> envoy::Result<()> {
     task::block_on(async {
         let port = test_utils::find_port().await;
         let server = task::spawn(async move {
-            let mut app = tide::new();
-            app.at("/").get(move |mut req: Request<()>| async move {
+            let mut app = envoy::new();
+            app.at("/").get(move |mut req: Context<()>| async move {
                 assert_eq!(req.body_string().await.unwrap(), "nori".to_string());
                 assert!(req.local_addr().unwrap().contains(&port.to_string()));
                 assert!(req.peer_addr().is_some());
@@ -38,12 +39,12 @@ fn hello_world() -> tide::Result<()> {
 }
 
 #[test]
-fn echo_server() -> tide::Result<()> {
+fn echo_server() -> envoy::Result<()> {
     task::block_on(async {
         let port = test_utils::find_port().await;
         let server = task::spawn(async move {
-            let mut app = tide::new();
-            app.at("/").get(|req| async move { Ok(req) });
+            let mut app = envoy::new();
+            app.at("/").get(|ctx: Context<()> | async move { Ok(ctx) });
 
             app.listen(("localhost", port)).await?;
             Result::<(), http_types::Error>::Ok(())
@@ -65,7 +66,7 @@ fn echo_server() -> tide::Result<()> {
 }
 
 #[test]
-fn json() -> tide::Result<()> {
+fn json() -> envoy::Result<()> {
     #[derive(Deserialize, Serialize)]
     struct Counter {
         count: usize,
@@ -74,8 +75,8 @@ fn json() -> tide::Result<()> {
     task::block_on(async {
         let port = test_utils::find_port().await;
         let server = task::spawn(async move {
-            let mut app = tide::new();
-            app.at("/").get(|mut req: Request<()>| async move {
+            let mut app = envoy::new();
+            app.at("/").get(|mut req: Context<()>| async move {
                 let mut counter: Counter = req.body_json().await.unwrap();
                 assert_eq!(counter.count, 0);
                 counter.count = 1;

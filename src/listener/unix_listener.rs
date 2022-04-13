@@ -10,13 +10,13 @@ use async_std::path::PathBuf;
 use async_std::prelude::*;
 use async_std::{io, task};
 
-/// This represents a tide [Listener](crate::listener::Listener) that
+/// This represents a envoy [Listener](crate::listener::Listener) that
 /// wraps an [async_std::os::unix::net::UnixListener]. It is implemented as an
-/// enum in order to allow creation of a tide::listener::UnixListener
+/// enum in order to allow creation of a envoy::listener::UnixListener
 /// from a [`PathBuf`] spec that has not yet been bound OR from a bound
 /// [async_std::os::unix::net::UnixListener].
 ///
-/// This is currently crate-visible only, and tide users are expected
+/// This is currently crate-visible only, and envoy users are expected
 /// to create these through [ToListener](crate::ToListener) conversions.
 pub struct UnixListener<State> {
     path: Option<PathBuf>,

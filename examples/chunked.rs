@@ -1,9 +1,9 @@
-use tide::Body;
+use envoy::Body;
 
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
-    tide::log::start();
-    let mut app = tide::new();
+    envoy::log::start();
+    let mut app = envoy::new();
     app.at("/").get(|_| async {
         // File sends are chunked by default.
         Ok(Body::from_file(file!()).await?)

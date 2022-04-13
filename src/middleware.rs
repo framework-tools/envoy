@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use crate::endpoint::DynEndpoint;
-use crate::{Request, Response};
+use crate::{Response, Context};
 use async_trait::async_trait;
 use std::future::Future;
 
@@ -12,7 +12,7 @@ use std::future::Future;
 #[async_trait]
 pub trait Middleware<State>: Send + Sync + 'static {
     /// Asynchronously handle the request, and return a response.
-    async fn handle(&self, request: Request<State>, next: Next<State>) -> crate::Result;
+    async fn handle(&self, ctx: Context<State>, next: Next<State>) -> crate::Result;
 
     /// Set the middleware's name. By default it uses the type signature.
     fn name(&self) -> &str {
@@ -33,12 +33,12 @@ where
     State: Clone + Send + Sync + 'static,
     Fut: Future<Output = crate::Result> + Send,
     F: Send + Sync + 'static + Fn(
-        Request<State>,
+        Context<State>,
         Next<State>,
     ) -> Fut,
 {
-    async fn handle(&self, req: Request<State>, next: Next<State>) -> crate::Result {
-        (self)(req, next).await
+    async fn handle(&self, ctx: Context<State>, next: Next<State>) -> crate::Result {
+        (self)(ctx, next).await
     }
 }
 
@@ -65,18 +65,18 @@ impl<State: Clone + Send + Sync + 'static> Next<State> {
     }
 
     /// Asynchronously execute the remaining middleware chain.
-    pub async fn run(mut self, req: Request<State>) -> Response {
+    pub async fn run(mut self, ctx: Context<State>) -> Response {
         let current_index = self.current_index; // get a copy of the current index
         self.current_index += 1; // increment the index for the next call
 
         match self.middleware.get(current_index) {
             // if there is a next middleware
-            Some(current) => match current.clone().handle(req, self).await {
+            Some(current) => match current.clone().handle(ctx, self).await {
                 Ok(request) => request,
                 Err(err) => err.into(),
             }
             // if there is no next middleware, execute the endpoint
-            None => match self.endpoint.call(req).await {
+            None => match self.endpoint.call(ctx).await {
                 Ok(request) => request,
                 Err(err) => err.into(),
             }

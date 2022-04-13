@@ -15,9 +15,9 @@ mod unix_tests {
             let sock_path_for_client = sock_path.clone();
 
             let server = task::spawn(async move {
-                let mut app = tide::new();
-                app.at("/").get(|req: tide::Request<()>| async move {
-                    Ok(req.local_addr().unwrap().to_string())
+                let mut app = envoy::new();
+                app.at("/").get(|ctx: envoy::Context<()>| async move {
+                    Ok(ctx.req.local_addr().unwrap().to_string())
                 });
                 app.listen(sock_path).await?;
                 http_types::Result::Ok(())

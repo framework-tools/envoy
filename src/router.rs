@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::endpoint::DynEndpoint;
-use crate::{Request, Response, StatusCode};
+use crate::{Response, StatusCode};
 
 /// The routing table used by `Server`
 ///
@@ -97,13 +97,13 @@ impl<State: Clone + Send + Sync + 'static> Router<State> {
 }
 
 async fn not_found_endpoint<State: Clone + Send + Sync + 'static>(
-    _req: Request<State>,
+    _ctx: crate::Context<State>
 ) -> crate::Result {
     Ok(Response::new(StatusCode::NotFound))
 }
 
 async fn method_not_allowed<State: Clone + Send + Sync + 'static>(
-    _req: Request<State>,
+    _ctx: crate::Context<State>
 ) -> crate::Result {
     Ok(Response::new(StatusCode::MethodNotAllowed))
 }

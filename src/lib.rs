@@ -1,4 +1,4 @@
-//! Tide is a minimal and pragmatic Rust web application framework built for
+//! Envoy is a minimal and pragmatic Rust web application framework built for
 //! rapid development. It comes with a robust set of features that make
 //! building async web applications and APIs easier and more fun.
 //!
@@ -10,7 +10,7 @@
 //!
 //! ```toml
 //! # Example, use the version numbers you need
-//! tide = "0.14.0"
+//! envoy = "0.14.0"
 //! async-std = { version = "1.6.0", features = ["attributes"] }
 //! serde = { version = "1.0", features = ["derive"] }
 //!```
@@ -21,8 +21,8 @@
 //! confirmation message.
 //!
 //! ```no_run
-//! use tide::Request;
-//! use tide::prelude::*;
+//! use envoy::Context;
+//! use envoy::prelude::*;
 //!
 //! #[derive(Debug, Deserialize)]
 //! struct Animal {
@@ -31,15 +31,15 @@
 //! }
 //!
 //! #[async_std::main]
-//! async fn main() -> tide::Result<()> {
-//!     let mut app = tide::new();
+//! async fn main() -> envoy::Result<()> {
+//!     let mut app = envoy::new();
 //!     app.at("/orders/shoes").post(order_shoes);
 //!     app.listen("127.0.0.1:8080").await?;
 //!     Ok(())
 //! }
 //!
-//! async fn order_shoes(mut req: Request<()>) -> tide::Result {
-//!     let Animal { name, legs } = req.body_json().await?;
+//! async fn order_shoes(mut ctx: Context<()>) -> envoy::Result {
+//!     let Animal { name, legs } = ctx.body_json().await?;
 //!     Ok(format!("Hello, {}! I've put in an order for {} shoes", name, legs).into())
 //! }
 //! ````
@@ -51,7 +51,7 @@
 //! $ curl localhost:8080/orders/shoes -d '{ "name": "Mary Millipede", "legs": 750 }'
 //! Hello, Mary Millipede! I've put in an order for 750 shoes
 //! ```
-//! See more examples in the [examples](https://github.com/http-rs/tide/tree/main/examples) directory.
+//! See more examples in the [examples](https://github.com/http-rs/envoy/tree/main/examples) directory.
 
 #![cfg_attr(feature = "docs", feature(doc_cfg))]
 #![forbid(unsafe_code)]
@@ -63,10 +63,11 @@
 #![doc(html_favicon_url = "https://yoshuawuyts.com/assets/http-rs/favicon.ico")]
 #![doc(html_logo_url = "https://yoshuawuyts.com/assets/http-rs/logo-rounded.png")]
 
+
+mod context;
 #[cfg(feature = "cookies")]
 mod cookies;
 mod endpoint;
-mod fs;
 mod middleware;
 mod redirect;
 mod request;
@@ -75,7 +76,6 @@ mod response_builder;
 mod route;
 mod router;
 mod server;
-
 pub mod convert;
 pub mod listener;
 pub mod log;
@@ -95,10 +95,11 @@ pub use response::Response;
 pub use response_builder::ResponseBuilder;
 pub use route::Route;
 pub use server::Server;
+pub use context::Context;
 
 pub use http_types::{self as http, Body, Error, Status, StatusCode};
 
-/// Create a new Tide server.
+/// Create a new Envoy server.
 ///
 /// # Examples
 ///
@@ -106,7 +107,7 @@ pub use http_types::{self as http, Body, Error, Status, StatusCode};
 /// # use async_std::task::block_on;
 /// # fn main() -> Result<(), std::io::Error> { block_on(async {
 /// #
-/// let mut app = tide::new();
+/// let mut app = envoy::new();
 /// app.at("/").get(|_| async { Ok("Hello, world!") });
 /// app.listen("127.0.0.1:8080").await?;
 /// #
@@ -117,7 +118,7 @@ pub fn new() -> server::Server<()> {
     Server::new()
 }
 
-/// Create a new Tide server with shared application scoped state.
+/// Create a new Envoy server with shared application scoped state.
 ///
 /// Application scoped state is useful for storing items
 ///
@@ -127,7 +128,7 @@ pub fn new() -> server::Server<()> {
 /// # use async_std::task::block_on;
 /// # fn main() -> Result<(), std::io::Error> { block_on(async {
 /// #
-/// use tide::Request;
+/// use envoy::Context;
 ///
 /// /// The shared application state.
 /// #[derive(Clone)]
@@ -141,9 +142,9 @@ pub fn new() -> server::Server<()> {
 /// };
 ///
 /// // Initialize the application with state.
-/// let mut app = tide::with_state(state);
-/// app.at("/").get(|req: Request<State>| async move {
-///     Ok(format!("Hello, {}!", &req.state().name))
+/// let mut app = envoy::with_state(state);
+/// app.at("/").get(|ctx: Context<State>| async move {
+///     Ok(format!("Hello, {}!", &ctx.state().name))
 /// });
 /// app.listen("127.0.0.1:8080").await?;
 /// #
@@ -156,5 +157,5 @@ where
     Server::with_state(state)
 }
 
-/// A specialized Result type for Tide.
+/// A specialized Result type for Envoy.
 pub type Result<T = Response> = std::result::Result<T, Error>;

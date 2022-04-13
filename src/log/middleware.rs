@@ -1,17 +1,17 @@
 use crate::log;
-use crate::{Middleware, Next, Request};
+use crate::{Middleware, Next};
 
 /// Log all incoming requests and responses.
 ///
-/// This middleware is enabled by default in Tide. In the case of
+/// This middleware is enabled by default in Envoy. In the case of
 /// nested applications, this middleware will only run once for each
 /// request.
 ///
 /// # Examples
 ///
 /// ```
-/// let mut app = tide::Server::new();
-/// app.with(tide::log::LogMiddleware::new());
+/// let mut app = envoy::Server::new();
+/// app.with(envoy::log::LogMiddleware::new());
 /// ```
 #[derive(Debug, Default, Clone)]
 pub struct LogMiddleware {
@@ -30,22 +30,22 @@ impl LogMiddleware {
     /// Log a request and a response.
     async fn log<'a, State: Clone + Send + Sync + 'static>(
         &'a self,
-        mut req: Request<State>,
+        mut ctx: crate::Context<State>,
         next: Next<State>,
     ) -> crate::Result {
-        if req.ext::<LogMiddlewareHasBeenRun>().is_some() {
-            return Ok(next.run(req).await);
+        if ctx.ext::<LogMiddlewareHasBeenRun>().is_some() {
+            return Ok(next.run(ctx).await);
         }
-        req.set_ext(LogMiddlewareHasBeenRun);
+        ctx.set_ext(LogMiddlewareHasBeenRun);
 
-        let path = req.url().path().to_owned();
-        let method = req.method().to_string();
+        let path = ctx.req.url().path().to_owned();
+        let method = ctx.req.method().to_string();
         log::info!("<-- Request received", {
             method: method,
             path: path,
         });
         let start = std::time::Instant::now();
-        let response = next.run(req).await;
+        let response = next.run(ctx).await;
         let status = response.status();
         if status.is_server_error() {
             if let Some(error) = response.error() {
@@ -97,7 +97,7 @@ impl LogMiddleware {
 
 #[async_trait::async_trait]
 impl<State: Clone + Send + Sync + 'static> Middleware<State> for LogMiddleware {
-    async fn handle(&self, req: Request<State>, next: Next<State>) -> crate::Result {
-        self.log(req, next).await
+    async fn handle(&self, ctx: crate::Context<State>, next: Next<State>) -> crate::Result {
+        self.log(ctx, next).await
     }
 }

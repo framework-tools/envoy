@@ -2,7 +2,7 @@ mod test_utils;
 use http_types::headers::HeaderName;
 use std::convert::TryInto;
 use test_utils::ServerTestingExt;
-use tide::Middleware;
+use envoy::Middleware;
 
 #[derive(Debug)]
 struct TestMiddleware(HeaderName, &'static str);
@@ -17,22 +17,22 @@ impl TestMiddleware {
 impl<State: Clone + Send + Sync + 'static> Middleware<State> for TestMiddleware {
     async fn handle(
         &self,
-        req: tide::Request<State>,
-        next: tide::Next<State>,
-    ) -> tide::Result<tide::Response> {
+        req: envoy::Context<State>,
+        next: envoy::Next<State>,
+    ) -> envoy::Result<envoy::Response> {
         let mut res = next.run(req).await;
         res.insert_header(self.0.clone(), self.1);
         Ok(res)
     }
 }
 
-async fn echo_path<State>(req: tide::Request<State>) -> tide::Result<String> {
+async fn echo_path<State>(req: envoy::Context<State>) -> envoy::Result<String> {
     Ok(req.url().path().to_string())
 }
 
 #[async_std::test]
-async fn route_middleware() -> tide::Result<()> {
-    let mut app = tide::new();
+async fn route_middleware() -> envoy::Result<()> {
+    let mut app = envoy::new();
     let mut foo_route = app.at("/foo");
     foo_route // /foo
         .with(TestMiddleware::with_header_name("X-Foo", "foo"))
@@ -57,8 +57,8 @@ async fn route_middleware() -> tide::Result<()> {
 }
 
 #[async_std::test]
-async fn app_and_route_middleware() -> tide::Result<()> {
-    let mut app = tide::new();
+async fn app_and_route_middleware() -> envoy::Result<()> {
+    let mut app = envoy::new();
     app.with(TestMiddleware::with_header_name("X-Root", "root"));
     app.at("/foo")
         .with(TestMiddleware::with_header_name("X-Foo", "foo"))
@@ -80,15 +80,15 @@ async fn app_and_route_middleware() -> tide::Result<()> {
 }
 
 #[async_std::test]
-async fn nested_app_with_route_middleware() -> tide::Result<()> {
-    let mut inner = tide::new();
+async fn nested_app_with_route_middleware() -> envoy::Result<()> {
+    let mut inner = envoy::new();
     inner.with(TestMiddleware::with_header_name("X-Inner", "inner"));
     inner
         .at("/baz")
         .with(TestMiddleware::with_header_name("X-Baz", "baz"))
         .get(echo_path);
 
-    let mut app = tide::new();
+    let mut app = envoy::new();
     app.with(TestMiddleware::with_header_name("X-Root", "root"));
     app.at("/foo")
         .with(TestMiddleware::with_header_name("X-Foo", "foo"))
@@ -114,8 +114,8 @@ async fn nested_app_with_route_middleware() -> tide::Result<()> {
 }
 
 #[async_std::test]
-async fn subroute_not_nested() -> tide::Result<()> {
-    let mut app = tide::new();
+async fn subroute_not_nested() -> envoy::Result<()> {
+    let mut app = envoy::new();
     app.at("/parent") // /parent
         .with(TestMiddleware::with_header_name("X-Parent", "Parent"))
         .get(echo_path);

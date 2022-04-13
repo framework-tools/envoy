@@ -302,8 +302,8 @@ mod parse_tests {
 
         #[test]
         fn str_url_to_unix_listener() {
-            let listener = listen("http+unix:///var/run/tide/socket").unwrap();
-            assert_eq!("http+unix:///var/run/tide/socket", listener.to_string());
+            let listener = listen("http+unix:///var/run/envoy/socket").unwrap();
+            assert_eq!("http+unix:///var/run/envoy/socket", listener.to_string());
 
             let listener = listen("http+unix://./socket").unwrap();
             assert_eq!("http+unix://./socket", listener.to_string());
@@ -324,7 +324,7 @@ mod parse_tests {
         use super::*;
         #[test]
         fn str_url_to_unix_listener() {
-            let err = listen("http+unix:///var/run/tide/socket").unwrap_err();
+            let err = listen("http+unix:///var/run/envoy/socket").unwrap_err();
             assert_eq!(
                 err.to_string(),
                 "Unix sockets not supported on this platform"

@@ -1,10 +1,7 @@
 use std::fmt::Debug;
-use std::io;
-use std::path::Path;
 use std::sync::Arc;
 
 use crate::endpoint::MiddlewareEndpoint;
-use crate::fs::{ServeDir, ServeFile};
 use crate::log;
 use crate::{router::Router, Endpoint, Middleware};
 
@@ -107,12 +104,12 @@ impl<'a, State: Clone + Send + Sync + 'static> Route<'a, State> {
     /// ```no_run
     /// #[async_std::main]
     /// async fn main() -> Result<(), std::io::Error> {
-    ///     let mut app = tide::new();
+    ///     let mut app = envoy::new();
     ///     app.at("/hello").nest({
-    ///         let mut example = tide::with_state("world");
+    ///         let mut example = envoy::with_state("world");
     ///         example
     ///             .at("/")
-    ///             .get(|req: tide::Request<&'static str>| async move {
+    ///             .get(|req: envoy::Context<&'static str>| async move {
     ///                 Ok(format!("Hello {state}!", state = req.state()))
     ///             });
     ///         example
@@ -136,48 +133,6 @@ impl<'a, State: Clone + Send + Sync + 'static> Route<'a, State> {
         self.prefix = prefix;
 
         self
-    }
-
-    /// Serve a directory statically.
-    ///
-    /// Each file will be streamed from disk, and a mime type will be determined
-    /// based on magic bytes.
-    ///
-    /// # Security
-    ///
-    /// This handler ensures no folders outside the specified folder can be
-    /// served, and attempts to access any path outside this folder (no matter
-    /// if it exists or not) will return `StatusCode::Forbidden` to the caller.
-    ///
-    /// # Examples
-    ///
-    /// Serve the contents of the local directory `./public/images/*` from
-    /// `localhost:8080/images/*`.
-    ///
-    /// ```no_run
-    /// #[async_std::main]
-    /// async fn main() -> Result<(), std::io::Error> {
-    ///     let mut app = tide::new();
-    ///     app.at("/images/*").serve_dir("public/images/")?;
-    ///     app.listen("127.0.0.1:8080").await?;
-    ///     Ok(())
-    /// }
-    /// ```
-    pub fn serve_dir(&mut self, dir: impl AsRef<Path>) -> io::Result<()> {
-        // Verify path exists, return error if it doesn't.
-        let dir = dir.as_ref().to_owned().canonicalize()?;
-        let prefix = self.path().to_string();
-        self.get(ServeDir::new(prefix, dir));
-        Ok(())
-    }
-
-    /// Serve a static file.
-    ///
-    /// The file will be streamed from disk, and a mime type will be determined
-    /// based on magic bytes. Similar to serve_dir
-    pub fn serve_file(&mut self, file: impl AsRef<Path>) -> io::Result<()> {
-        self.get(ServeFile::init(file)?);
-        Ok(())
     }
 
     /// Add an endpoint for the given HTTP method
@@ -296,14 +251,15 @@ where
     State: Clone + Send + Sync + 'static,
     E: Endpoint<State>,
 {
-    async fn call(&self, req: crate::Request<State>) -> crate::Result {
-        let crate::Request {
+    async fn call(&self, ctx: crate::Context<State>) -> crate::Result {
+        let crate::Context {
             state,
             mut req,
-            route_params,
-        } = req;
+            res,
+            params,
+        } = ctx;
 
-        let rest = route_params
+        let rest = params
             .iter()
             .rev()
             .find_map(|captures| captures.wildcard())
@@ -312,10 +268,11 @@ where
         req.url_mut().set_path(rest);
 
         self.0
-            .call(crate::Request {
+            .call(crate::Context {
                 state,
                 req,
-                route_params,
+                res,
+                params,
             })
             .await
     }

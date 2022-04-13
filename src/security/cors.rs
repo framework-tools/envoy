@@ -2,7 +2,7 @@ use http_types::headers::{HeaderValue, HeaderValues};
 use http_types::{headers, Method, StatusCode};
 
 use crate::middleware::{Middleware, Next};
-use crate::{Request, Result};
+use crate::{Result};
 
 /// Middleware for CORS
 ///
@@ -10,7 +10,7 @@ use crate::{Request, Result};
 ///
 /// ```no_run
 /// use http_types::headers::HeaderValue;
-/// use tide::security::{CorsMiddleware, Origin};
+/// use envoy::security::{CorsMiddleware, Origin};
 ///
 /// let cors = CorsMiddleware::new()
 ///     .allow_methods("GET, POST, OPTIONS".parse::<HeaderValue>().unwrap())
@@ -134,13 +134,13 @@ impl CorsMiddleware {
 
 #[async_trait::async_trait]
 impl<State: Clone + Send + Sync + 'static> Middleware<State> for CorsMiddleware {
-    async fn handle(&self, req: Request<State>, next: Next<State>) -> Result {
+    async fn handle(&self, ctx: crate::Context<State>, next: Next<State>) -> Result {
         // TODO: how should multiple origin values be handled?
-        let origins = req.header(&headers::ORIGIN).cloned();
+        let origins = ctx.req.header(&headers::ORIGIN).cloned();
 
         if origins.is_none() {
             // This is not a CORS request if there is no Origin header
-            return Ok(next.run(req).await);
+            return Ok(next.run(ctx).await);
         }
 
         let origins = origins.unwrap();
@@ -151,11 +151,11 @@ impl<State: Clone + Send + Sync + 'static> Middleware<State> for CorsMiddleware 
         }
 
         // Return results immediately upon preflight request
-        if req.method() == Method::Options {
+        if ctx.req.method() == Method::Options {
             return Ok(self.build_preflight_response(&origins).into());
         }
 
-        let mut response = next.run(req).await;
+        let mut response = next.run(ctx).await;
 
         response.insert_header(
             headers::ACCESS_CONTROL_ALLOW_ORIGIN,

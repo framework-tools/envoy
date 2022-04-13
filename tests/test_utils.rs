@@ -9,7 +9,7 @@ pub async fn find_port() -> u16 {
 use std::convert::TryInto;
 use surf::{Client, Config, RequestBuilder};
 
-/// Trait that adds test request capabilities to tide [`Server`]s
+/// Trait that adds test request capabilities to envoy [`Server`]s
 pub trait ServerTestingExt {
     /// Construct a new surf Client
     fn client(&self) -> Client;
@@ -60,11 +60,11 @@ pub trait ServerTestingExt {
     }
 }
 
-impl<State: Clone + Send + Sync + Unpin + 'static> ServerTestingExt for tide::Server<State> {
+impl<State: Clone + Send + Sync + Unpin + 'static> ServerTestingExt for envoy::Server<State> {
     fn client(&self) -> Client {
         let config = Config::new()
             .set_http_client(self.clone())
-            .set_base_url(tide::http::Url::parse("http://example.com").unwrap());
+            .set_base_url(envoy::http::Url::parse("http://example.com").unwrap());
         config.try_into().unwrap()
     }
 }

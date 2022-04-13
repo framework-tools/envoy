@@ -1,4 +1,5 @@
-use tide::Request;
+use envoy::Context;
+
 
 fn fib(n: usize) -> usize {
     if n == 0 || n == 1 {
@@ -8,9 +9,9 @@ fn fib(n: usize) -> usize {
     }
 }
 
-async fn fibsum(req: Request<()>) -> tide::Result<String> {
+async fn fibsum(ctx: Context<()>) -> envoy::Result<String> {
     use std::time::Instant;
-    let n: usize = req.param("n")?.parse().unwrap_or(0);
+    let n: usize = ctx.param("n")?.parse().unwrap_or(0);
     // Start a stopwatch
     let start = Instant::now();
     // Compute the nth number in the fibonacci sequence
@@ -30,7 +31,7 @@ async fn fibsum(req: Request<()>) -> tide::Result<String> {
 // It was computed in 2 secs.
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
-    let mut app = tide::new();
+    let mut app = envoy::new();
     app.at("/fib/:n").get(fibsum);
     app.listen("0.0.0.0:8080").await?;
     Ok(())

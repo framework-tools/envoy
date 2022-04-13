@@ -1,10 +1,10 @@
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
-    tide::log::start();
-    let mut app = tide::new();
+    envoy::log::start();
+    let mut app = envoy::new();
     app.at("/").get(|_| async { Ok("Root") });
     app.at("/api").nest({
-        let mut api = tide::new();
+        let mut api = envoy::new();
         api.at("/hello").get(|_| async { Ok("Hello, world") });
         api.at("/goodbye").get(|_| async { Ok("Goodbye, world") });
         api

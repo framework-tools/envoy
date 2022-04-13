@@ -1,23 +1,23 @@
-//! # Tide session support
+//! # Envoy session support
 //!
-//! This document provides a high-level overview of tide's approach to
+//! This document provides a high-level overview of envoy's approach to
 //! sessions. For implementation and examples, please refer to
 //! [SessionMiddleware](crate::sessions::SessionMiddleware)
 //!
-//! Sessions allows tide to securely attach data to a browser session
-//! allowing for retrieval and modification of this data within tide
+//! Sessions allows envoy to securely attach data to a browser session
+//! allowing for retrieval and modification of this data within envoy
 //! on subsequent visits. Session data is generally only retained for
 //! the duration of a browser session.
 //!
-//! Tide's session implementation provides guest sessions by default,
-//! meaning that all web requests to a session-enabled tide host will
+//! Envoy's session implementation provides guest sessions by default,
+//! meaning that all web requests to a session-enabled envoy host will
 //! have a cookie attached, whether or not there is anything stored in
 //! that client's session yet.
 //!
 //! ## Stores
 //!
-//! Although tide provides two bundled session stores, it is highly
-//! recommended that tide applications use an
+//! Although envoy provides two bundled session stores, it is highly
+//! recommended that envoy applications use an
 //! external-datastore-backed session storage. For a list of currently
 //! available session stores, see [the documentation for
 //! async-session](https://github.com/http-rs/async-session).
@@ -25,8 +25,8 @@
 //! ## Security
 //!
 //! Although each session store may have different security
-//! implications, the general approach of tide's session system is as
-//! follows: On each request, tide checks the cookie configurable as
+//! implications, the general approach of envoy's session system is as
+//! follows: On each request, envoy checks the cookie configurable as
 //! `cookie_name` on the middleware.
 //!
 //! ### If no cookie is found:
@@ -48,9 +48,9 @@
 //!
 //! ### Expiry
 //!
-//! In addition to setting an expiry on the session cookie, tide
+//! In addition to setting an expiry on the session cookie, envoy
 //! sessions include the same expiry in their serialization format. If
-//! an adversary were able to tamper with the expiry of a cookie, tide
+//! an adversary were able to tamper with the expiry of a cookie, envoy
 //! sessions would still check the expiry on the contained session
 //! before using it
 //!
@@ -63,9 +63,9 @@
 //! ## Stale/expired session cleanup
 //!
 //! Any session store other than the cookie store will accumulate
-//! stale sessions.  Although the tide session middleware ensures that
+//! stale sessions.  Although the envoy session middleware ensures that
 //! they will not be used as valid sessions, For most session stores,
-//! it is the tide application's responsibility to call cleanup on the
+//! it is the envoy application's responsibility to call cleanup on the
 //! session store if it requires it
 //!
 

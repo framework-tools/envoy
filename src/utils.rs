@@ -1,6 +1,6 @@
 //! Miscellaneous utilities.
 
-use crate::{Middleware, Next, Request, Response};
+use crate::{Middleware, Next, Response, Context};
 pub use async_trait::async_trait;
 use std::future::Future;
 
@@ -12,13 +12,13 @@ use std::future::Future;
 /// # Examples
 ///
 /// ```rust
-/// use tide::{utils, Request};
+/// use envoy::{utils, Context};
 /// use std::time::Instant;
 ///
-/// let mut app = tide::new();
-/// app.with(utils::Before(|mut request: Request<()>| async move {
-///     request.set_ext(Instant::now());
-///     request
+/// let mut app = envoy::new();
+/// app.with(utils::Before(|mut ctx: Context<()>| async move {
+///     ctx.set_ext(Instant::now());
+///     ctx
 /// }));
 /// ```
 #[derive(Debug)]
@@ -28,12 +28,12 @@ pub struct Before<F>(pub F);
 impl<State, F, Fut> Middleware<State> for Before<F>
 where
     State: Clone + Send + Sync + 'static,
-    F: Fn(Request<State>) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = Request<State>> + Send + Sync + 'static,
+    F: Fn(Context<State>) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Context<State>> + Send + Sync + 'static,
 {
-    async fn handle(&self, request: Request<State>, next: Next<State>) -> crate::Result {
-        let request = (self.0)(request).await;
-        Ok(next.run(request).await)
+    async fn handle(&self, ctx: crate::Context<State>, next: Next<State>) -> crate::Result {
+        let ctx = (self.0)(ctx).await;
+        Ok(next.run(ctx).await)
     }
 }
 
@@ -45,9 +45,9 @@ where
 /// # Examples
 ///
 /// ```rust
-/// use tide::{utils, http, Response};
+/// use envoy::{utils, http, Response};
 ///
-/// let mut app = tide::new();
+/// let mut app = envoy::new();
 /// app.with(utils::After(|res: Response| async move {
 ///     match res.status() {
 ///         http::StatusCode::NotFound => Ok("Page not found".into()),
@@ -65,8 +65,8 @@ where
     F: Fn(Response) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = crate::Result> + Send + Sync + 'static,
 {
-    async fn handle(&self, request: Request<State>, next: Next<State>) -> crate::Result {
-        let response = next.run(request).await;
+    async fn handle(&self, ctx: crate::Context<State>, next: Next<State>) -> crate::Result {
+        let response = next.run(ctx).await;
         (self.0)(response).await
     }
 }

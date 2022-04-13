@@ -15,16 +15,16 @@ impl State {
 }
 
 #[async_std::main]
-async fn main() -> tide::Result<()> {
-    tide::log::start();
-    let mut app = tide::with_state(State::new());
-    app.at("/").get(|req: tide::Request<State>| async move {
-        let state = req.state();
+async fn main() -> envoy::Result<()> {
+    envoy::log::start();
+    let mut app = envoy::with_state(State::new());
+    app.at("/").get(|ctx: envoy::Context<State>| async move {
+        let state = ctx.state();
         let value = state.value.load(Ordering::Relaxed);
         Ok(format!("{}\n", value))
     });
-    app.at("/inc").get(|req: tide::Request<State>| async move {
-        let state = req.state();
+    app.at("/inc").get(|ctx: envoy::Context<State>| async move {
+        let state = ctx.state();
         let value = state.value.fetch_add(1, Ordering::Relaxed) + 1;
         Ok(format!("{}\n", value))
     });

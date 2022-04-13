@@ -7,7 +7,7 @@ use async_std::io;
 
 use crate::listener::ListenInfo;
 
-/// FailoverListener allows tide to attempt to listen in a sequential
+/// FailoverListener allows envoy to attempt to listen in a sequential
 /// order to any number of ports/addresses. The first successful
 /// listener is used.
 ///
@@ -15,17 +15,17 @@ use crate::listener::ListenInfo;
 /// ```rust
 /// fn main() -> Result<(), std::io::Error> {
 ///    async_std::task::block_on(async {
-///        tide::log::start();
-///        let mut app = tide::new();
+///        envoy::log::start();
+///        let mut app = envoy::new();
 ///        app.at("/").get(|_| async { Ok("Hello, world!") });
 ///
-///        let mut listener = tide::listener::FailoverListener::new();
+///        let mut listener = envoy::listener::FailoverListener::new();
 ///        listener.add("127.0.0.1:8000")?;
 ///        listener.add(async_std::net::TcpListener::bind("127.0.0.1:8001").await?)?;
 /// # if cfg!(unix) {
 ///        listener.add("http+unix://unix.socket")?;
 /// # }
-///    
+///
 /// # if false {
 ///        app.listen(listener).await?;
 /// # }
@@ -58,13 +58,13 @@ where
     ///
     /// ```rust
     /// # fn main() -> std::io::Result<()> {
-    /// let mut listener = tide::listener::FailoverListener::new();
+    /// let mut listener = envoy::listener::FailoverListener::new();
     /// listener.add("127.0.0.1:8000")?;
     /// listener.add(("localhost", 8001))?;
     /// # if cfg!(unix) {
-    /// listener.add("http+unix:///var/run/tide")?;
+    /// listener.add("http+unix:///var/run/envoy")?;
     /// # }
-    /// # std::mem::drop(tide::new().listen(listener)); // for the State generic
+    /// # std::mem::drop(envoy::new().listen(listener)); // for the State generic
     /// # Ok(()) }
     /// ```
     pub fn add<L>(&mut self, listener: L) -> io::Result<()>
@@ -77,9 +77,9 @@ where
 
     /// `FailoverListener::with_listener` allows for chained construction of a FailoverListener:
     /// ```rust,no_run
-    /// # use tide::listener::FailoverListener;
+    /// # use envoy::listener::FailoverListener;
     /// # fn main() -> std::io::Result<()> { async_std::task::block_on(async move {
-    /// # let app = tide::new();
+    /// # let app = envoy::new();
     /// app.listen(
     ///     FailoverListener::new()
     ///         .with_listener("127.0.0.1:8080")

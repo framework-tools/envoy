@@ -5,12 +5,12 @@ use async_trait::async_trait;
 use http_types::Result;
 
 use crate::middleware::Next;
-use crate::{Middleware, Request, Response};
+use crate::{Middleware, Response, Context};
 
 /// An HTTP request handler.
 ///
 /// This trait is automatically implemented for `Fn` types, and so is rarely implemented
-/// directly by Tide users.
+/// directly by Envoy users.
 ///
 /// In practice, endpoints are functions that take a `Request<State>` as an argument and
 /// return a type `T` that implements `Into<Response>`.
@@ -24,11 +24,11 @@ use crate::{Middleware, Request, Response};
 /// A simple endpoint that is invoked on a `GET` request and returns a `String`:
 ///
 /// ```no_run
-/// async fn hello(_req: tide::Request<()>) -> tide::Result<String> {
+/// async fn hello(_req: envoy::Context<()>) -> envoy::Result<String> {
 ///     Ok(String::from("hello"))
 /// }
 ///
-/// let mut app = tide::Server::new();
+/// let mut app = envoy::Server::new();
 /// app.at("/hello").get(hello);
 /// ```
 ///
@@ -36,19 +36,19 @@ use crate::{Middleware, Request, Response};
 ///
 /// ```no_run
 /// # use core::future::Future;
-/// fn hello(_req: tide::Request<()>) -> impl Future<Output = tide::Result<String>> {
+/// fn hello(_req: envoy::Context<()>) -> impl Future<Output = envoy::Result<String>> {
 ///     async_std::future::ready(Ok(String::from("hello")))
 /// }
 ///
-/// let mut app = tide::Server::new();
+/// let mut app = envoy::Server::new();
 /// app.at("/hello").get(hello);
 /// ```
 ///
-/// Tide routes will also accept endpoints with `Fn` signatures of this form, but using the `async` keyword has better ergonomics.
+/// Envoy routes will also accept endpoints with `Fn` signatures of this form, but using the `async` keyword has better ergonomics.
 #[async_trait]
 pub trait Endpoint<State: Clone + Send + Sync + 'static>: Send + Sync + 'static {
     /// Invoke the endpoint within the given context
-    async fn call(&self, req: Request<State>) -> crate::Result;
+    async fn call(&self, ctx: Context<State>) -> crate::Result;
 }
 
 pub(crate) type DynEndpoint<State> = dyn Endpoint<State>;
@@ -63,12 +63,12 @@ impl<State> Debug for DynEndpoint<State> where State: Debug {
 impl<State, F, Fut, Res> Endpoint<State> for F
 where
     State: Clone + Send + Sync + 'static,
-    F: Send + Sync + 'static + Fn(Request<State>) -> Fut,
+    F: Send + Sync + 'static + Fn(Context<State>) -> Fut,
     Fut: core::future::Future<Output = Result<Res>> + Send + 'static,
     Res: Into<Response> + 'static,
 {
-    async fn call(&self, req: Request<State>) -> crate::Result {
-        let fut = (self)(req);
+    async fn call(&self, ctx: Context<State>) -> crate::Result {
+        let fut = (self)(ctx);
         let res = fut.await?;
         Ok(res.into())
     }
@@ -124,15 +124,15 @@ where
     State: Clone + Send + Sync + 'static,
     E: Endpoint<State>,
 {
-    async fn call(&self, req: Request<State>) -> crate::Result {
+    async fn call(&self, ctx: Context<State>) -> crate::Result {
         let next = Next::new(self.endpoint.clone(), self.middleware.clone());
-        Ok(next.run(req).await)
+        Ok(next.run(ctx).await)
     }
 }
 
 #[async_trait]
 impl<State: Clone + Send + Sync + 'static> Endpoint<State> for Box<dyn Endpoint<State>> {
-    async fn call(&self, request: Request<State>) -> crate::Result {
-        self.as_ref().call(request).await
+    async fn call(&self, ctx: Context<State>) -> crate::Result {
+        self.as_ref().call(ctx).await
     }
 }

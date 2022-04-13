@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use async_std::{fs::OpenOptions, io};
 use tempfile::TempDir;
-use tide::prelude::*;
-use tide::{Body, Request, Response, StatusCode};
+use envoy::{prelude::*, Context};
+use envoy::{Body, Response, StatusCode};
 
 #[derive(Clone)]
 struct TempDirState {
@@ -26,8 +26,8 @@ impl TempDirState {
 
 #[async_std::main]
 async fn main() -> Result<(), IoError> {
-    tide::log::start();
-    let mut app = tide::with_state(TempDirState::try_new()?);
+    envoy::log::start();
+    let mut app = envoy::with_state(TempDirState::try_new()?);
 
     // To test this example:
     // $ cargo run --example upload
@@ -35,9 +35,9 @@ async fn main() -> Result<(), IoError> {
     // $ curl localhost:8080/README.md # this reads the file from the same temp directory
 
     app.at(":file")
-        .put(|req: Request<TempDirState>| async move {
-            let path = req.param("file")?;
-            let fs_path = req.state().path().join(path);
+        .put(|ctx: Context<TempDirState>| async move {
+            let path = ctx.param("file")?;
+            let fs_path = ctx.state().path().join(path);
 
             let file = OpenOptions::new()
                 .create(true)
@@ -45,18 +45,18 @@ async fn main() -> Result<(), IoError> {
                 .open(&fs_path)
                 .await?;
 
-            let bytes_written = io::copy(req, file).await?;
+            let bytes_written = io::copy(ctx.req, file).await?;
 
-            tide::log::info!("file written", {
+            envoy::log::info!("file written", {
                 bytes: bytes_written,
                 path: fs_path.canonicalize()?.to_str()
             });
 
             Ok(json!({ "bytes": bytes_written }))
         })
-        .get(|req: Request<TempDirState>| async move {
-            let path = req.param("file")?;
-            let fs_path = req.state().path().join(path);
+        .get(|ctx: Context<TempDirState>| async move {
+            let path = ctx.param("file")?;
+            let fs_path = ctx.state().path().join(path);
 
             if let Ok(body) = Body::from_file(fs_path).await {
                 Ok(body.into())

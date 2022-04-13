@@ -6,9 +6,9 @@
 //! # use async_std::task::block_on;
 //! # fn main() -> Result<(), std::io::Error> { block_on(async {
 //! #
-//! use tide::Redirect;
+//! use envoy::Redirect;
 //!
-//! let mut app = tide::new();
+//! let mut app = envoy::new();
 //! app.at("/").get(|_| async { Ok("meow") });
 //! app.at("/nori").get(Redirect::temporary("/"));
 //! app.listen("127.0.0.1:8080").await?;
@@ -17,18 +17,18 @@
 //! ```
 
 use crate::http::headers::LOCATION;
-use crate::StatusCode;
-use crate::{Endpoint, Request, Response};
+use crate::{StatusCode, Context};
+use crate::{Endpoint, Response};
 
 /// A redirection endpoint.
 ///
 /// # Example
 ///
 /// ```
-/// # use tide::{Response, Redirect, Request, StatusCode};
+/// # use envoy::{Response, Redirect, Request, StatusCode};
 /// # fn next_product() -> Option<String> { None }
 /// # #[allow(dead_code)]
-/// async fn route_handler(request: Request<()>) -> tide::Result {
+/// async fn route_handler(request: Request<()>) -> envoy::Result {
 ///     if let Some(product_url) = next_product() {
 ///         Ok(Redirect::new(product_url).into())
 ///     } else {
@@ -91,7 +91,7 @@ where
     State: Clone + Send + Sync + 'static,
     T: AsRef<str> + Send + Sync + 'static,
 {
-    async fn call(&self, _req: Request<State>) -> crate::Result<Response> {
+    async fn call(&self, _ctx: Context<State>) -> crate::Result<Response> {
         Ok(self.into())
     }
 }
