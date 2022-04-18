@@ -1,9 +1,10 @@
 use crate::listener::{Listener, ToListener};
-use crate::Server;
+use crate::{Server, EnvoyErr};
 
 use std::fmt::{self, Debug, Display, Formatter};
 
 use async_std::io;
+use tracing::Level;
 
 use crate::listener::ListenInfo;
 
@@ -34,12 +35,12 @@ use crate::listener::ListenInfo;
 ///}
 ///```
 #[derive(Default)]
-pub struct FailoverListener<State> {
-    listeners: Vec<Option<Box<dyn Listener<State>>>>,
+pub struct FailoverListener<State, Err> {
+    listeners: Vec<Option<Box<dyn Listener<State, Err>>>>,
     index: Option<usize>,
 }
 
-impl<State> FailoverListener<State>
+impl<State, Err> FailoverListener<State, Err>
 where
     State: Clone + Send + Sync + 'static,
 {
@@ -69,7 +70,7 @@ where
     /// ```
     pub fn add<L>(&mut self, listener: L) -> io::Result<()>
     where
-        L: ToListener<State>,
+        L: ToListener<State, Err>,
     {
         self.listeners.push(Some(Box::new(listener.to_listener()?)));
         Ok(())
@@ -88,7 +89,7 @@ where
     /// #  Ok(()) }) }
     pub fn with_listener<L>(mut self, listener: L) -> Self
     where
-        L: ToListener<State>,
+        L: ToListener<State, Err>,
     {
         self.add(listener).expect("Unable to add listener");
         self
@@ -96,11 +97,12 @@ where
 }
 
 #[async_trait::async_trait]
-impl<State> Listener<State> for FailoverListener<State>
+impl<State, Err> Listener<State, Err> for FailoverListener<State, Err>
 where
     State: Clone + Send + Sync + 'static,
+    Err: EnvoyErr
 {
-    async fn bind(&mut self, app: Server<State>) -> io::Result<()> {
+    async fn bind(&mut self, app: Server<State, Err>) -> io::Result<()> {
         for (index, listener) in self.listeners.iter_mut().enumerate() {
             let listener = listener.as_deref_mut().expect("bind called twice");
             match listener.bind(app.clone()).await {
@@ -108,12 +110,10 @@ where
                     self.index = Some(index);
                     return Ok(());
                 }
-                Err(e) => {
-                    crate::log::info!("unable to bind", {
-                        listener: listener.to_string(),
-                        error: e.to_string()
-                    });
-                }
+                Err(e) => tracing::event!(Level::INFO, "unable to bind {} {}",
+                    listener = listener.to_string(),
+                    error = e.to_string()
+                )
             }
         }
 
@@ -148,13 +148,13 @@ where
     }
 }
 
-impl<State> Debug for FailoverListener<State> {
+impl<State, Err> Debug for FailoverListener<State, Err> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.listeners)
     }
 }
 
-impl<State> Display for FailoverListener<State> {
+impl<State, Err> Display for FailoverListener<State, Err> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let string = self
             .listeners

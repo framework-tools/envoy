@@ -17,7 +17,7 @@ use std::fmt::{Debug, Display};
 use async_std::io;
 use async_trait::async_trait;
 
-use crate::Server;
+use crate::{Server, EnvoyErr};
 
 pub use concurrent_listener::ConcurrentListener;
 pub use failover_listener::FailoverListener;
@@ -35,14 +35,14 @@ pub(crate) use unix_listener::UnixListener;
 /// implement at least one [`ToListener`](crate::listener::ToListener) that
 /// outputs your Listener type.
 #[async_trait]
-pub trait Listener<State>: Debug + Display + Send + Sync + 'static
+pub trait Listener<State, Err>: Debug + Display + Send + Sync + 'static
 where
     State: Send + Sync + 'static,
 {
     /// Bind the listener. This starts the listening process by opening the
     /// necessary network ports, but not yet accepting incoming connections. This
     /// method must be called before `accept`.
-    async fn bind(&mut self, app: Server<State>) -> io::Result<()>;
+    async fn bind(&mut self, app: Server<State, Err>) -> io::Result<()>;
 
     /// Start accepting incoming connections. This method must be called only
     /// after `bind` has succeeded.
@@ -54,12 +54,12 @@ where
 }
 
 #[async_trait]
-impl<L, State> Listener<State> for Box<L>
+impl<L, State, Err: EnvoyErr> Listener<State, Err> for Box<L>
 where
-    L: Listener<State>,
+    L: Listener<State, Err>,
     State: Send + Sync + 'static,
 {
-    async fn bind(&mut self, app: Server<State>) -> io::Result<()> {
+    async fn bind(&mut self, app: Server<State, Err>) -> io::Result<()> {
         self.as_mut().bind(app).await
     }
 

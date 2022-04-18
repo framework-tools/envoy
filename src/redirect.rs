@@ -17,7 +17,7 @@
 //! ```
 
 use crate::http::headers::LOCATION;
-use crate::{StatusCode, Context};
+use crate::{StatusCode, Context, EnvoyErr};
 use crate::{Endpoint, Response};
 
 /// A redirection endpoint.
@@ -86,7 +86,7 @@ impl<T: AsRef<str>> Redirect<T> {
 }
 
 #[async_trait::async_trait]
-impl<State, T> Endpoint<State> for Redirect<T>
+impl<State, T, Err: EnvoyErr> Endpoint<State, Err> for Redirect<T>
 where
     State: Clone + Send + Sync + 'static,
     T: AsRef<str> + Send + Sync + 'static,

@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use crate::endpoint::MiddlewareEndpoint;
-use crate::log;
+use crate::{log, EnvoyErr};
 use crate::{router::Router, Endpoint, Middleware};
 
 /// A handle to a route.
@@ -14,10 +14,10 @@ use crate::{router::Router, Endpoint, Middleware};
 ///
 /// [`Server::at`]: ./struct.Server.html#method.at
 #[allow(missing_debug_implementations)]
-pub struct Route<'a, State> {
-    router: &'a mut Router<State>,
+pub struct Route<'a, State, Err> {
+    router: &'a mut Router<State, Err>,
     path: String,
-    middleware: Vec<Arc<dyn Middleware<State>>>,
+    middleware: Vec<Arc<dyn Middleware<State, Err>>>,
     /// Indicates whether the path of current route is treated as a prefix. Set by
     /// [`strip_prefix`].
     ///
@@ -25,8 +25,8 @@ pub struct Route<'a, State> {
     prefix: bool,
 }
 
-impl<'a, State: Clone + Send + Sync + 'static> Route<'a, State> {
-    pub(crate) fn new(router: &'a mut Router<State>, path: String) -> Route<'a, State> {
+impl<'a, State: Clone + Send + Sync + 'static, Err: EnvoyErr> Route<'a, State, Err> {
+    pub(crate) fn new(router: &'a mut Router<State, Err>, path: String) -> Route<'a, State, Err> {
         Route {
             router,
             path,
@@ -36,7 +36,7 @@ impl<'a, State: Clone + Send + Sync + 'static> Route<'a, State> {
     }
 
     /// Extend the route with the given `path`.
-    pub fn at<'b>(&'b mut self, path: &str) -> Route<'b, State> {
+    pub fn at<'b>(&'b mut self, path: &str) -> Route<'b, State, Err> {
         let mut p = self.path.clone();
 
         if !p.ends_with('/') && !path.starts_with('/') {
@@ -76,7 +76,7 @@ impl<'a, State: Clone + Send + Sync + 'static> Route<'a, State> {
     /// Apply the given middleware to the current route.
     pub fn with<M>(&mut self, middleware: M) -> &mut Self
     where
-        M: Middleware<State>,
+        M: Middleware<State, Err>,
     {
         log::trace!(
             "Adding middleware {} to route {:?}",
@@ -121,7 +121,7 @@ impl<'a, State: Clone + Send + Sync + 'static> Route<'a, State> {
     /// ```
     ///
     /// [`Server`]: struct.Server.html
-    pub fn nest<InnerState>(&mut self, service: crate::Server<InnerState>) -> &mut Self
+    pub fn nest<InnerState>(&mut self, service: crate::Server<InnerState, Err>) -> &mut Self
     where
         State: Clone + Send + Sync + 'static,
         InnerState: Clone + Send + Sync + 'static,
@@ -136,7 +136,7 @@ impl<'a, State: Clone + Send + Sync + 'static> Route<'a, State> {
     }
 
     /// Add an endpoint for the given HTTP method
-    pub fn method(&mut self, method: http_types::Method, ep: impl Endpoint<State>) -> &mut Self {
+    pub fn method(&mut self, method: http_types::Method, ep: impl Endpoint<State, Err>) -> &mut Self {
         if self.prefix {
             let ep = StripPrefixEndpoint::new(ep);
             let wildcard = self.at("*");
@@ -158,7 +158,7 @@ impl<'a, State: Clone + Send + Sync + 'static> Route<'a, State> {
     /// Add an endpoint for all HTTP methods, as a fallback.
     ///
     /// Routes with specific HTTP methods will be tried first.
-    pub fn all(&mut self, ep: impl Endpoint<State>) -> &mut Self {
+    pub fn all(&mut self, ep: impl Endpoint<State, Err>) -> &mut Self {
         if self.prefix {
             let ep = StripPrefixEndpoint::new(ep);
             let wildcard = self.at("*");
@@ -176,55 +176,55 @@ impl<'a, State: Clone + Send + Sync + 'static> Route<'a, State> {
     }
 
     /// Add an endpoint for `GET` requests
-    pub fn get(&mut self, ep: impl Endpoint<State>) -> &mut Self {
+    pub fn get(&mut self, ep: impl Endpoint<State, Err>) -> &mut Self {
         self.method(http_types::Method::Get, ep);
         self
     }
 
     /// Add an endpoint for `HEAD` requests
-    pub fn head(&mut self, ep: impl Endpoint<State>) -> &mut Self {
+    pub fn head(&mut self, ep: impl Endpoint<State, Err>) -> &mut Self {
         self.method(http_types::Method::Head, ep);
         self
     }
 
     /// Add an endpoint for `PUT` requests
-    pub fn put(&mut self, ep: impl Endpoint<State>) -> &mut Self {
+    pub fn put(&mut self, ep: impl Endpoint<State, Err>) -> &mut Self {
         self.method(http_types::Method::Put, ep);
         self
     }
 
     /// Add an endpoint for `POST` requests
-    pub fn post(&mut self, ep: impl Endpoint<State>) -> &mut Self {
+    pub fn post(&mut self, ep: impl Endpoint<State, Err>) -> &mut Self {
         self.method(http_types::Method::Post, ep);
         self
     }
 
     /// Add an endpoint for `DELETE` requests
-    pub fn delete(&mut self, ep: impl Endpoint<State>) -> &mut Self {
+    pub fn delete(&mut self, ep: impl Endpoint<State, Err>) -> &mut Self {
         self.method(http_types::Method::Delete, ep);
         self
     }
 
     /// Add an endpoint for `OPTIONS` requests
-    pub fn options(&mut self, ep: impl Endpoint<State>) -> &mut Self {
+    pub fn options(&mut self, ep: impl Endpoint<State, Err>) -> &mut Self {
         self.method(http_types::Method::Options, ep);
         self
     }
 
     /// Add an endpoint for `CONNECT` requests
-    pub fn connect(&mut self, ep: impl Endpoint<State>) -> &mut Self {
+    pub fn connect(&mut self, ep: impl Endpoint<State, Err>) -> &mut Self {
         self.method(http_types::Method::Connect, ep);
         self
     }
 
     /// Add an endpoint for `PATCH` requests
-    pub fn patch(&mut self, ep: impl Endpoint<State>) -> &mut Self {
+    pub fn patch(&mut self, ep: impl Endpoint<State, Err>) -> &mut Self {
         self.method(http_types::Method::Patch, ep);
         self
     }
 
     /// Add an endpoint for `TRACE` requests
-    pub fn trace(&mut self, ep: impl Endpoint<State>) -> &mut Self {
+    pub fn trace(&mut self, ep: impl Endpoint<State, Err>) -> &mut Self {
         self.method(http_types::Method::Trace, ep);
         self
     }
@@ -246,12 +246,12 @@ impl<E> Clone for StripPrefixEndpoint<E> {
 }
 
 #[async_trait::async_trait]
-impl<State, E> Endpoint<State> for StripPrefixEndpoint<E>
+impl<State, E, Err: EnvoyErr> Endpoint<State, Err> for StripPrefixEndpoint<E>
 where
     State: Clone + Send + Sync + 'static,
-    E: Endpoint<State>,
+    E: Endpoint<State, Err>,
 {
-    async fn call(&self, ctx: crate::Context<State>) -> crate::Result {
+    async fn call(&self, ctx: crate::Context<State>) -> crate::Result<Err> {
         let crate::Context {
             state,
             mut req,

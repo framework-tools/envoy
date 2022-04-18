@@ -4,9 +4,8 @@ use async_std::io;
 use async_std::sync::Arc;
 
 #[cfg(feature = "cookies")]
-use crate::cookies;
 use crate::listener::{Listener, ToListener};
-use crate::log;
+use crate::{EnvoyErr};
 use crate::middleware::{Middleware, Next};
 use crate::router::{Router, Selection};
 use crate::{Endpoint, Route};
@@ -26,8 +25,8 @@ use crate::{Endpoint, Route};
 /// - Middleware extends the base Envoy framework with additional request or
 /// response processing, such as compression, default headers, or logging. To
 /// add middleware to an app, use the [`Server::with`] method.
-pub struct Server<State> {
-    router: Arc<Router<State>>,
+pub struct Server<State, Err> {
+    router: Arc<Router<State, Err>>,
     state: State,
     /// Holds the middleware stack.
     ///
@@ -37,10 +36,10 @@ pub struct Server<State> {
     /// The inner Arc-s allow MiddlewareEndpoint-s to be cloned internally.
     /// We don't use a Mutex around the Vec here because adding a middleware during execution should be an error.
     #[allow(clippy::rc_buffer)]
-    middleware: Arc<Vec<Arc<dyn Middleware<State>>>>,
+    middleware: Arc<Vec<Arc<dyn Middleware<State, Err>>>>,
 }
 
-impl Server<()> {
+impl<Err: EnvoyErr> Server<(), Err> {
     /// Create a new Envoy server.
     ///
     /// # Examples
@@ -61,13 +60,13 @@ impl Server<()> {
     }
 }
 
-impl Default for Server<()> {
+impl<Err: EnvoyErr> Default for Server<(), Err> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<State> Server<State>
+impl<State, Err: EnvoyErr> Server<State, Err>
 where
     State: Clone + Send + Sync + 'static,
 {
@@ -106,12 +105,7 @@ where
     pub fn with_state(state: State) -> Self {
         Self {
             router: Arc::new(Router::new()),
-            middleware: Arc::new(vec![
-                #[cfg(feature = "cookies")]
-                Arc::new(cookies::CookiesMiddleware::new()),
-                #[cfg(feature = "logger")]
-                Arc::new(log::LogMiddleware::new()),
-            ]),
+            middleware: Arc::new(Vec::new()),
             state,
         }
     }
@@ -162,7 +156,7 @@ where
     /// There is no fallback route matching, i.e. either a resource is a full
     /// match or not, which means that the order of adding resources has no
     /// effect.
-    pub fn at<'a>(&'a mut self, path: &str) -> Route<'a, State> {
+    pub fn at<'a>(&'a mut self, path: &str) -> Route<'a, State, Err> {
         let router = Arc::get_mut(&mut self.router)
             .expect("Registering routes is not possible after the Server has started");
         Route::new(router, path.to_owned())
@@ -179,9 +173,9 @@ where
     /// order in which it is applied.
     pub fn with<M>(&mut self, middleware: M) -> &mut Self
     where
-        M: Middleware<State>,
+        M: Middleware<State, Err>,
     {
-        log::trace!("Adding middleware {}", middleware.name());
+        tracing::trace!("Adding middleware {}", middleware.name());
         let m = Arc::get_mut(&mut self.middleware)
             .expect("Registering middleware is not possible after the Server has started");
         m.push(Arc::new(middleware));
@@ -205,11 +199,11 @@ where
     /// #
     /// # Ok(()) }) }
     /// ```
-    pub async fn listen<L: ToListener<State>>(self, listener: L) -> io::Result<()> {
+    pub async fn listen<L: ToListener<State, Err>>(self, listener: L) -> io::Result<()> {
         let mut listener = listener.to_listener()?;
         listener.bind(self).await?;
         for info in listener.info().iter() {
-            log::info!("Server listening on {}", info);
+            tracing::info!("Server listening on {}", info);
         }
         listener.accept().await?;
         Ok(())
@@ -244,10 +238,10 @@ where
     /// #
     /// # Ok(()) }) }
     /// ```
-    pub async fn bind<L: ToListener<State>>(
+    pub async fn bind<L: ToListener<State, Err>>(
         self,
         listener: L,
-    ) -> io::Result<<L as ToListener<State>>::Listener> {
+    ) -> io::Result<<L as ToListener<State, Err>>::Listener> {
         let mut listener = listener.to_listener()?;
         listener.bind(self).await?;
         Ok(listener)
@@ -316,13 +310,13 @@ where
     }
 }
 
-impl<State: Send + Sync + 'static> std::fmt::Debug for Server<State> {
+impl<State: Send + Sync + 'static, Err> std::fmt::Debug for Server<State, Err> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Server").finish()
     }
 }
 
-impl<State: Clone> Clone for Server<State> {
+impl<State: Clone, Err> Clone for Server<State, Err> {
     fn clone(&self) -> Self {
         Self {
             router: self.router.clone(),
@@ -333,10 +327,10 @@ impl<State: Clone> Clone for Server<State> {
 }
 
 #[async_trait::async_trait]
-impl<State: Clone + Sync + Send + 'static, InnerState: Clone + Sync + Send + 'static>
-    Endpoint<State> for Server<InnerState>
+impl<State: Clone + Sync + Send + 'static, InnerState: Clone + Sync + Send + 'static, Err: EnvoyErr>
+    Endpoint<State, Err> for Server<InnerState, Err>
 {
-    async fn call(&self, ctx: crate::Context<State>) -> crate::Result {
+    async fn call(&self, ctx: crate::Context<State>) -> crate::Result<Err> {
         let crate::Context {
             req,
             res,
@@ -360,7 +354,7 @@ impl<State: Clone + Sync + Send + 'static, InnerState: Clone + Sync + Send + 'st
 }
 
 #[crate::utils::async_trait]
-impl<State: Clone + Send + Sync + Unpin + 'static> http_client::HttpClient for Server<State> {
+impl<State: Clone + Send + Sync + Unpin + 'static, Err: EnvoyErr> http_client::HttpClient for Server<State, Err> {
     async fn send(&self, req: crate::http::Request) -> crate::http::Result<crate::http::Response> {
         self.respond(req).await
     }
@@ -372,14 +366,14 @@ mod test {
 
     #[test]
     fn allow_nested_server_with_same_state() {
-        let inner = envoy::new();
+        let inner = envoy::new::<()>();
         let mut outer = envoy::new();
         outer.at("/foo").get(inner);
     }
 
     #[test]
     fn allow_nested_server_with_different_state() {
-        let inner = envoy::with_state(1);
+        let inner = envoy::with_state::<i32, ()>(1);
         let mut outer = envoy::new();
         outer.at("/foo").get(inner);
     }

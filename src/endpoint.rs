@@ -2,10 +2,9 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use http_types::Result;
 
-use crate::middleware::Next;
-use crate::{Middleware, Response, Context};
+use crate::middleware::{Next};
+use crate::{Middleware, Context, EnvoyErr};
 
 /// An HTTP request handler.
 ///
@@ -46,40 +45,39 @@ use crate::{Middleware, Response, Context};
 ///
 /// Envoy routes will also accept endpoints with `Fn` signatures of this form, but using the `async` keyword has better ergonomics.
 #[async_trait]
-pub trait Endpoint<State: Clone + Send + Sync + 'static>: Send + Sync + 'static {
+pub trait Endpoint<State: Clone + Send + Sync + 'static, Err: EnvoyErr>: Send + Sync + 'static {
     /// Invoke the endpoint within the given context
-    async fn call(&self, ctx: Context<State>) -> crate::Result;
+    async fn call(&self, ctx: Context<State>) -> crate::Result<Err>;
 }
 
-pub(crate) type DynEndpoint<State> = dyn Endpoint<State>;
+pub(crate) type DynEndpoint<State, Err> = dyn Endpoint<State, Err>;
 
-impl<State> Debug for DynEndpoint<State> where State: Debug {
+impl<State, Err> Debug for DynEndpoint<State, Err> where State: Debug {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "dyn {:?}<{:?}>", std::any::type_name::<Self>(), std::any::type_name::<State>())
     }
 }
 
 #[async_trait]
-impl<State, F, Fut, Res> Endpoint<State> for F
+impl<State, F, Fut, Err: EnvoyErr> Endpoint<State, Err> for F
 where
     State: Clone + Send + Sync + 'static,
     F: Send + Sync + 'static + Fn(Context<State>) -> Fut,
-    Fut: core::future::Future<Output = Result<Res>> + Send + 'static,
-    Res: Into<Response> + 'static,
+    Fut: core::future::Future<Output = crate::Result<Err>> + Send + 'static,
 {
-    async fn call(&self, ctx: Context<State>) -> crate::Result {
+    async fn call(&self, ctx: Context<State>) -> crate::Result<Err> {
         let fut = (self)(ctx);
         let res = fut.await?;
         Ok(res.into())
     }
 }
 
-pub(crate) struct MiddlewareEndpoint<E, State> {
+pub(crate) struct MiddlewareEndpoint<E, State, Err> {
     endpoint: Arc<E>,
-    middleware: Arc<Vec<Arc<dyn Middleware<State>>>>,
+    middleware: Arc<Vec<Arc<dyn Middleware<State, Err>>>>,
 }
 
-impl<E: Clone, State> Clone for MiddlewareEndpoint<E, State> {
+impl<E: Clone, State, Err> Clone for MiddlewareEndpoint<E, State, Err> {
     fn clone(&self) -> Self {
         Self {
             endpoint: self.endpoint.clone(),
@@ -88,7 +86,7 @@ impl<E: Clone, State> Clone for MiddlewareEndpoint<E, State> {
     }
 }
 
-impl<E, State> std::fmt::Debug for MiddlewareEndpoint<E, State> {
+impl<E, State, Err> std::fmt::Debug for MiddlewareEndpoint<E, State, Err> {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             fmt,
@@ -98,15 +96,15 @@ impl<E, State> std::fmt::Debug for MiddlewareEndpoint<E, State> {
     }
 }
 
-impl<E, State> MiddlewareEndpoint<E, State>
+impl<E, State, Err: EnvoyErr> MiddlewareEndpoint<E, State, Err>
 where
     State: Clone + Send + Sync + 'static,
-    E: Endpoint<State>,
+    E: Endpoint<State, Err>,
 {
     pub(crate) fn wrap_with_middleware(
         ep: E,
-        middleware: Vec<Arc<dyn Middleware<State>>>,
-    ) -> Arc<dyn Endpoint<State> + Send + Sync + 'static> {
+        middleware: Vec<Arc<dyn Middleware<State, Err>>>,
+    ) -> Arc<dyn Endpoint<State, Err> + Send + Sync + 'static> {
         if middleware.is_empty() {
             Arc::new(ep)
         } else {
@@ -119,20 +117,20 @@ where
 }
 
 #[async_trait]
-impl<E, State> Endpoint<State> for MiddlewareEndpoint<E, State>
+impl<E, State, Err: EnvoyErr> Endpoint<State, Err> for MiddlewareEndpoint<E, State, Err>
 where
     State: Clone + Send + Sync + 'static,
-    E: Endpoint<State>,
+    E: Endpoint<State, Err>,
 {
-    async fn call(&self, ctx: Context<State>) -> crate::Result {
+    async fn call(&self, ctx: Context<State>) -> crate::Result<Err> {
         let next = Next::new(self.endpoint.clone(), self.middleware.clone());
-        Ok(next.run(ctx).await)
+        next.run(ctx).await
     }
 }
 
 #[async_trait]
-impl<State: Clone + Send + Sync + 'static> Endpoint<State> for Box<dyn Endpoint<State>> {
-    async fn call(&self, ctx: Context<State>) -> crate::Result {
+impl<State: Clone + Send + Sync + 'static, Err: EnvoyErr> Endpoint<State, Err> for Box<dyn Endpoint<State, Err>> {
+    async fn call(&self, ctx: Context<State>) -> crate::Result<Err> {
         self.as_ref().call(ctx).await
     }
 }

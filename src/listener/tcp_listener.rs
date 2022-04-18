@@ -1,13 +1,14 @@
 use super::{is_transient_error, ListenInfo};
 
 use crate::listener::Listener;
-use crate::{log, Server};
+use crate::{Server, EnvoyErr};
 
 use std::fmt::{self, Display, Formatter};
 
 use async_std::net::{self, SocketAddr, TcpStream};
 use async_std::prelude::*;
 use async_std::{io, task};
+use tracing::Level;
 
 /// This represents a envoy [Listener](crate::listener::Listener) that
 /// wraps an [async_std::net::TcpListener]. It is implemented as an
@@ -17,14 +18,14 @@ use async_std::{io, task};
 ///
 /// This is currently crate-visible only, and envoy users are expected
 /// to create these through [ToListener](crate::ToListener) conversions.
-pub struct TcpListener<State> {
+pub struct TcpListener<State, Err> {
     addrs: Option<Vec<SocketAddr>>,
     listener: Option<net::TcpListener>,
-    server: Option<Server<State>>,
+    server: Option<Server<State, Err>>,
     info: Option<ListenInfo>,
 }
 
-impl<State> TcpListener<State> {
+impl<State, Err> TcpListener<State, Err> {
     pub fn from_addrs(addrs: Vec<SocketAddr>) -> Self {
         Self {
             addrs: Some(addrs),
@@ -44,7 +45,7 @@ impl<State> TcpListener<State> {
     }
 }
 
-fn handle_tcp<State: Clone + Send + Sync + 'static>(app: Server<State>, stream: TcpStream) {
+fn handle_tcp<State: Clone + Send + Sync + 'static, Err: EnvoyErr>(app: Server<State, Err>, stream: TcpStream) {
     task::spawn(async move {
         let local_addr = stream.local_addr().ok();
         let peer_addr = stream.peer_addr().ok();
@@ -56,17 +57,19 @@ fn handle_tcp<State: Clone + Send + Sync + 'static>(app: Server<State>, stream: 
         });
 
         if let Err(error) = fut.await {
-            log::error!("async-h1 error", { error: error.to_string() });
+            tracing::event!(Level::INFO, "async-h1 error {}",
+                error
+            );
         }
     });
 }
 
 #[async_trait::async_trait]
-impl<State> Listener<State> for TcpListener<State>
+impl<State, Err: EnvoyErr> Listener<State, Err> for TcpListener<State, Err>
 where
     State: Clone + Send + Sync + 'static,
 {
-    async fn bind(&mut self, server: Server<State>) -> io::Result<()> {
+    async fn bind(&mut self, server: Server<State, Err>) -> io::Result<()> {
         assert!(self.server.is_none(), "`bind` should only be called once");
         self.server = Some(server);
 
@@ -105,7 +108,7 @@ where
                 Err(ref e) if is_transient_error(e) => continue,
                 Err(error) => {
                     let delay = std::time::Duration::from_millis(500);
-                    crate::log::error!("Error: {}. Pausing for {:?}.", error, delay);
+                    tracing::event!(Level::INFO, "Error: {}. Pausing for {:?}.", error, delay);
                     task::sleep(delay).await;
                     continue;
                 }
@@ -126,7 +129,7 @@ where
     }
 }
 
-impl<State> fmt::Debug for TcpListener<State> {
+impl<State, Err> fmt::Debug for TcpListener<State, Err> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("TcpListener")
             .field("listener", &self.listener)
@@ -143,7 +146,7 @@ impl<State> fmt::Debug for TcpListener<State> {
     }
 }
 
-impl<State> Display for TcpListener<State> {
+impl<State, Err> Display for TcpListener<State, Err> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let http_fmt = |a| format!("http://{}", a);
         match &self.listener {

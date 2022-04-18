@@ -261,9 +261,8 @@ impl Response {
     /// res.body_json(data)?;
     /// # Ok(()) }
     /// ```
-    pub fn body_json(&mut self, json: &impl Serialize) -> crate::Result<()> {
+    pub fn body_json(&mut self, json: &impl Serialize) -> () {
         self.res.set_body(Body::from_json(json)?);
-        Ok(())
     }
 
     /// Pass a string as the response body.

@@ -1,7 +1,7 @@
 #[cfg(unix)]
 use super::UnixListener;
 use super::{ListenInfo, Listener, TcpListener};
-use crate::Server;
+use crate::{Server, EnvoyErr};
 
 use async_std::io;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -13,13 +13,13 @@ use std::fmt::{self, Debug, Display, Formatter};
 ///
 /// This is currently crate-visible only, and envoy users are expected
 /// to create these through [ToListener](crate::ToListener) conversions.
-pub enum ParsedListener<State> {
+pub enum ParsedListener<State, Err> {
     #[cfg(unix)]
-    Unix(UnixListener<State>),
-    Tcp(TcpListener<State>),
+    Unix(UnixListener<State, Err>),
+    Tcp(TcpListener<State, Err>),
 }
 
-impl<State> Debug for ParsedListener<State> {
+impl<State, Err> Debug for ParsedListener<State, Err> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             #[cfg(unix)]
@@ -29,7 +29,7 @@ impl<State> Debug for ParsedListener<State> {
     }
 }
 
-impl<State> Display for ParsedListener<State> {
+impl<State, Err> Display for ParsedListener<State, Err> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             #[cfg(unix)]
@@ -40,11 +40,11 @@ impl<State> Display for ParsedListener<State> {
 }
 
 #[async_trait::async_trait]
-impl<State> Listener<State> for ParsedListener<State>
+impl<State, Err: EnvoyErr> Listener<State, Err> for ParsedListener<State, Err>
 where
     State: Clone + Send + Sync + 'static,
 {
-    async fn bind(&mut self, server: Server<State>) -> io::Result<()> {
+    async fn bind(&mut self, server: Server<State, Err>) -> io::Result<()> {
         match self {
             #[cfg(unix)]
             Self::Unix(u) => u.bind(server).await,

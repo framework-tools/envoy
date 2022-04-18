@@ -1,7 +1,7 @@
 use super::{is_transient_error, ListenInfo};
 
 use crate::listener::Listener;
-use crate::{log, Server};
+use crate::{Server, EnvoyErr};
 
 use std::fmt::{self, Display, Formatter};
 
@@ -9,6 +9,7 @@ use async_std::os::unix::net::{self, SocketAddr, UnixStream};
 use async_std::path::PathBuf;
 use async_std::prelude::*;
 use async_std::{io, task};
+use tracing::Level;
 
 /// This represents a envoy [Listener](crate::listener::Listener) that
 /// wraps an [async_std::os::unix::net::UnixListener]. It is implemented as an
@@ -18,14 +19,14 @@ use async_std::{io, task};
 ///
 /// This is currently crate-visible only, and envoy users are expected
 /// to create these through [ToListener](crate::ToListener) conversions.
-pub struct UnixListener<State> {
+pub struct UnixListener<State, Err> {
     path: Option<PathBuf>,
     listener: Option<net::UnixListener>,
-    server: Option<Server<State>>,
+    server: Option<Server<State, Err>>,
     info: Option<ListenInfo>,
 }
 
-impl<State> UnixListener<State> {
+impl<State, Err> UnixListener<State, Err> {
     pub fn from_path(path: impl Into<PathBuf>) -> Self {
         Self {
             path: Some(path.into()),
@@ -45,7 +46,7 @@ impl<State> UnixListener<State> {
     }
 }
 
-fn handle_unix<State: Clone + Send + Sync + 'static>(app: Server<State>, stream: UnixStream) {
+fn handle_unix<State: Clone + Send + Sync + 'static, Err: EnvoyErr>(app: Server<State, Err>, stream: UnixStream) {
     task::spawn(async move {
         let local_addr = unix_socket_addr_to_string(stream.local_addr());
         let peer_addr = unix_socket_addr_to_string(stream.peer_addr());
@@ -57,17 +58,17 @@ fn handle_unix<State: Clone + Send + Sync + 'static>(app: Server<State>, stream:
         });
 
         if let Err(error) = fut.await {
-            log::error!("async-h1 error", { error: error.to_string() });
+            tracing::event!(Level::INFO, "async-h1 error {}", error);
         }
     });
 }
 
 #[async_trait::async_trait]
-impl<State> Listener<State> for UnixListener<State>
+impl<State, Err: EnvoyErr> Listener<State, Err> for UnixListener<State, Err>
 where
     State: Clone + Send + Sync + 'static,
 {
-    async fn bind(&mut self, server: Server<State>) -> io::Result<()> {
+    async fn bind(&mut self, server: Server<State, Err>) -> io::Result<()> {
         assert!(self.server.is_none(), "`bind` should only be called once");
         self.server = Some(server);
 
@@ -103,7 +104,7 @@ where
                 Err(ref e) if is_transient_error(e) => continue,
                 Err(error) => {
                     let delay = std::time::Duration::from_millis(500);
-                    crate::log::error!("Error: {}. Pausing for {:?}.", error, delay);
+                    tracing::error!("Error: {}. Pausing for {:?}.", error, delay);
                     task::sleep(delay).await;
                     continue;
                 }
@@ -124,7 +125,7 @@ where
     }
 }
 
-impl<State> fmt::Debug for UnixListener<State> {
+impl<State, Err> fmt::Debug for UnixListener<State, Err> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("UnixListener")
             .field("listener", &self.listener)
@@ -141,7 +142,7 @@ impl<State> fmt::Debug for UnixListener<State> {
     }
 }
 
-impl<State> Display for UnixListener<State> {
+impl<State, Err> Display for UnixListener<State, Err> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self.listener {
             Some(listener) => {

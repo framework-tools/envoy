@@ -4,11 +4,6 @@ use crate::http::headers::{HeaderName, HeaderValues, ToHeaderValues};
 use crate::http::{headers, Body, Method, Mime, StatusCode, Url, Version};
 use crate::http::format_err;
 
-#[cfg(feature = "cookies")]
-use crate::cookies::CookieData;
-#[cfg(feature = "cookies")]
-use crate::http::cookies::Cookie;
-
 /// ## The context of a request.
 ///
 /// This is a wrapper around a [crate::http::Request] and a [crate::http::Response]
@@ -311,7 +306,7 @@ impl<State> Context<State> {
     /// #
     /// # Ok(()) })}
     /// ```
-    pub fn param(&self, key: &str) -> crate::Result<&str> {
+    pub fn param(&self, key: &str) -> R<&str> {
         self.params
             .iter()
             .rev()
@@ -430,7 +425,7 @@ impl<State> Context<State> {
     /// #
     /// # Ok(()) })}
     /// ```
-    pub async fn body_bytes(&mut self) -> crate::Result<Vec<u8>> {
+    pub async fn body_bytes(&mut self) -> R<Vec<u8>> {
         let res = self.req.body_bytes().await?;
         Ok(res)
     }
@@ -464,7 +459,7 @@ impl<State> Context<State> {
     /// #
     /// # Ok(()) })}
     /// ```
-    pub async fn body_string(&mut self) -> crate::Result<String> {
+    pub async fn body_string(&mut self) -> R<String> {
         let res = self.req.body_string().await?;
         Ok(res)
     }
@@ -478,7 +473,7 @@ impl<State> Context<State> {
     ///
     /// If the body cannot be interpreted as valid json for the target type `T`,
     /// an `Err` is returned.
-    pub async fn body_json<T: serde::de::DeserializeOwned>(&mut self) -> crate::Result<T> {
+    pub async fn body_json<T: serde::de::DeserializeOwned>(&mut self) -> R<T> {
         let res = self.req.body_json().await?;
         Ok(res)
     }
@@ -515,7 +510,7 @@ impl<State> Context<State> {
     /// // number too large to fit in target type
     /// # Ok(()) })}
     /// ```
-    pub async fn body_form<T: serde::de::DeserializeOwned>(&mut self) -> crate::Result<T> {
+    pub async fn body_form<T: serde::de::DeserializeOwned>(&mut self) -> R<T> {
         let res = self.req.body_form().await?;
         Ok(res)
     }

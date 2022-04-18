@@ -65,8 +65,6 @@
 
 
 mod context;
-#[cfg(feature = "cookies")]
-mod cookies;
 mod endpoint;
 mod middleware;
 mod redirect;
@@ -78,14 +76,7 @@ mod router;
 mod server;
 pub mod convert;
 pub mod listener;
-pub mod log;
 pub mod prelude;
-pub mod security;
-pub mod sse;
-pub mod utils;
-
-#[cfg(feature = "sessions")]
-pub mod sessions;
 
 pub use endpoint::Endpoint;
 pub use middleware::{Middleware, Next};
@@ -114,7 +105,7 @@ pub use http_types::{self as http, Body, Error, Status, StatusCode};
 /// # Ok(()) }) }
 /// ```
 #[must_use]
-pub fn new() -> server::Server<()> {
+pub fn new<Err>() -> server::Server<(), Err> {
     Server::new()
 }
 
@@ -150,12 +141,19 @@ pub fn new() -> server::Server<()> {
 /// #
 /// # Ok(()) }) }
 /// ```
-pub fn with_state<State>(state: State) -> server::Server<State>
-where
-    State: Clone + Send + Sync + 'static,
+pub fn with_state<State, Err: EnvoyErr>(state: State) -> server::Server<State, Err>
+where State: Clone + Send + Sync + 'static,
 {
     Server::with_state(state)
 }
 
 /// A specialized Result type for Envoy.
-pub type Result<T = Response> = std::result::Result<T, Error>;
+pub type Result<Error> = std::result::Result<(), HttpError<Error>>;
+pub trait EnvoyErr: Send + Sync + core::fmt::Debug + 'static {}
+impl<T> EnvoyErr for T where T: Send + Sync + core::fmt::Debug + 'static {}
+
+#[derive(Debug)]
+struct HttpError<Error> {
+    status: StatusCode,
+    error: Error,
+}
