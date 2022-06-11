@@ -4,15 +4,14 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use crate::endpoint::DynEndpoint;
-use crate::{Context, EnvoyErr};
 use async_trait::async_trait;
 use std::future::Future;
 
 /// Middleware that wraps around the remaining middleware chain.
 #[async_trait]
-pub trait Middleware<State, Err>: Send + Sync + 'static {
+pub trait Middleware: Send + Sync {
     /// Asynchronously handle the request, and return a response.
-    async fn handle(&self, ctx: Context<State>, next: Next<State, Err>) -> R;
+    async fn handle(&self, ctx: &mut crate::Context, next: Next) -> crate::Result;
 
     /// Set the middleware's name. By default it uses the type signature.
     fn name(&self) -> &str {
@@ -20,46 +19,48 @@ pub trait Middleware<State, Err>: Send + Sync + 'static {
     }
 }
 
-impl<State, Err> Debug for dyn Middleware<State, Err>
-where
-    State: Debug,
-{
+impl Debug for dyn Middleware {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "dyn {:?}<{:?}>",
+            "dyn Middleware<{:?}>",
             std::any::type_name::<Self>(),
-            std::any::type_name::<State>()
         )
     }
 }
 
-#[async_trait]
-impl<State, F, Fut, Err> Middleware<State, Err> for F
+#[async_trait::async_trait]
+impl<F> Middleware for F
 where
-    State: Clone + Send + Sync + 'static,
-    Fut: Future<Output = R> + Send,
-    F: Send + Sync + 'static + Fn(Context<State>, Next<State, Err>) -> Fut,
+    F: for<'arg1> Fn1<&'arg1 mut crate::Context, Next> + Sync + Send,
+    for<'arg1> <F as Fn1<&'arg1 mut crate::Context, Next>>::Output: Future<Output = crate::Result> + Send,
 {
-    async fn handle(&self, ctx: Context<State>, next: Next<State, Err>) -> crate::Result<Err> {
-        (self)(ctx, next).await
+    async fn handle(&self, ctx: &mut crate::Context, next: Next) -> crate::Result {
+        self(ctx, next).await
     }
+}
+
+trait Fn1<Arg1, Arg2>: Fn(Arg1, Arg2) -> <Self as Fn1<Arg1, Arg2>>::Output {
+    type Output;
+}
+impl<F: Fn(Arg1, Arg2) -> O, Arg1, Arg2, O> Fn1<Arg1, Arg2> for F {
+    type Output = O;
 }
 
 /// The remainder of a middleware chain, including the endpoint.
 #[derive(Debug)]
-pub struct Next<State, Err> {
-    endpoint: Arc<DynEndpoint<State, Err>>,
-    middleware: Arc<Vec<Arc<dyn Middleware<State, Err>>>>,
+pub struct Next {
+    endpoint: Arc<DynEndpoint>,
+    middleware: Arc<Vec<Arc<dyn Middleware>>>,
     current_index: usize,
 }
 
-impl<State: Clone + Send + Sync + 'static, Err: EnvoyErr> Next<State, Err> {
+impl Next {
     /// Create a new Next instance.
     pub fn new(
-        endpoint: Arc<DynEndpoint<State, Err>>,
-        middleware: Arc<Vec<Arc<dyn Middleware<State, Err>>>>,
-    ) -> Next<State, Err> {
+        endpoint: Arc<DynEndpoint>,
+        middleware: Arc<Vec<Arc<dyn Middleware>>>,
+    ) -> Next {
         Next {
             endpoint,
             middleware,
@@ -68,7 +69,7 @@ impl<State: Clone + Send + Sync + 'static, Err: EnvoyErr> Next<State, Err> {
     }
 
     /// Asynchronously execute the remaining middleware chain.
-    pub async fn run(mut self, ctx: Context<State>) -> crate::Result<Err> {
+    pub async fn run(mut self, ctx: &mut crate::Context) -> crate::Result {
         let current_index = self.current_index; // get a copy of the current index
         self.current_index += 1; // increment the index for the next call
 

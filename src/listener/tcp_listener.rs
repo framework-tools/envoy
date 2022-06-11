@@ -1,31 +1,32 @@
 use super::{is_transient_error, ListenInfo};
 
 use crate::listener::Listener;
-use crate::{Server, EnvoyErr};
+use crate::{Server};
 
 use std::fmt::{self, Display, Formatter};
+use std::net::SocketAddr;
 
-use async_std::net::{self, SocketAddr, TcpStream};
-use async_std::prelude::*;
-use async_std::{io, task};
+use tokio::net::{TcpStream};
+use tokio::{io, task};
+use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::Level;
 
 /// This represents a envoy [Listener](crate::listener::Listener) that
-/// wraps an [async_std::net::TcpListener]. It is implemented as an
+/// wraps an [tokio::net::TcpListener]. It is implemented as an
 /// enum in order to allow creation of a envoy::listener::TcpListener
 /// from a SocketAddr spec that has not yet been bound OR from a bound
 /// TcpListener.
 ///
 /// This is currently crate-visible only, and envoy users are expected
 /// to create these through [ToListener](crate::ToListener) conversions.
-pub struct TcpListener<State, Err> {
+pub struct TcpListener {
     addrs: Option<Vec<SocketAddr>>,
-    listener: Option<net::TcpListener>,
-    server: Option<Server<State, Err>>,
+    listener: Option<tokio::net::TcpListener>,
+    server: Option<Server>,
     info: Option<ListenInfo>,
 }
 
-impl<State, Err> TcpListener<State, Err> {
+impl TcpListener {
     pub fn from_addrs(addrs: Vec<SocketAddr>) -> Self {
         Self {
             addrs: Some(addrs),
@@ -35,7 +36,7 @@ impl<State, Err> TcpListener<State, Err> {
         }
     }
 
-    pub fn from_listener(tcp_listener: impl Into<net::TcpListener>) -> Self {
+    pub fn from_listener(tcp_listener: impl Into<tokio::net::TcpListener>) -> Self {
         Self {
             addrs: None,
             listener: Some(tcp_listener.into()),
@@ -45,12 +46,15 @@ impl<State, Err> TcpListener<State, Err> {
     }
 }
 
-fn handle_tcp<State: Clone + Send + Sync + 'static, Err: EnvoyErr>(app: Server<State, Err>, stream: TcpStream) {
+fn handle_tcp(app: Server, stream: TcpStream) {
     task::spawn(async move {
         let local_addr = stream.local_addr().ok();
         let peer_addr = stream.peer_addr().ok();
+        let (reader, writer) = stream.split();
+        let reader = reader.compat();
+        let writer = writer.compat_write();
 
-        let fut = async_h1::accept(stream, |mut req| async {
+        let fut = async_h1::accept(stream.into_split(), |mut req| async {
             req.set_local_addr(local_addr);
             req.set_peer_addr(peer_addr);
             app.respond(req).await
@@ -65,11 +69,8 @@ fn handle_tcp<State: Clone + Send + Sync + 'static, Err: EnvoyErr>(app: Server<S
 }
 
 #[async_trait::async_trait]
-impl<State, Err: EnvoyErr> Listener<State, Err> for TcpListener<State, Err>
-where
-    State: Clone + Send + Sync + 'static,
-{
-    async fn bind(&mut self, server: Server<State, Err>) -> io::Result<()> {
+impl Listener for TcpListener {
+    async fn bind(&mut self, server: Server) -> io::Result<()> {
         assert!(self.server.is_none(), "`bind` should only be called once");
         self.server = Some(server);
 
@@ -101,24 +102,21 @@ where
             .take()
             .expect("`Listener::bind` must be called before `Listener::accept`");
 
-        let mut incoming = listener.incoming();
-
-        while let Some(stream) = incoming.next().await {
-            match stream {
+        loop {
+            match listener.accept().await {
                 Err(ref e) if is_transient_error(e) => continue,
                 Err(error) => {
                     let delay = std::time::Duration::from_millis(500);
                     tracing::event!(Level::INFO, "Error: {}. Pausing for {:?}.", error, delay);
-                    task::sleep(delay).await;
+                    tokio::time::sleep(delay).await;
                     continue;
                 }
 
-                Ok(stream) => {
+                Ok((stream, ..)) => {
                     handle_tcp(server.clone(), stream);
                 }
             };
         }
-        Ok(())
     }
 
     fn info(&self) -> Vec<ListenInfo> {
@@ -129,7 +127,7 @@ where
     }
 }
 
-impl<State, Err> fmt::Debug for TcpListener<State, Err> {
+impl fmt::Debug for TcpListener {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("TcpListener")
             .field("listener", &self.listener)
@@ -137,7 +135,7 @@ impl<State, Err> fmt::Debug for TcpListener<State, Err> {
             .field(
                 "server",
                 if self.server.is_some() {
-                    &"Some(Server<State>)"
+                    &"Some(Server)"
                 } else {
                     &"None"
                 },
@@ -146,7 +144,7 @@ impl<State, Err> fmt::Debug for TcpListener<State, Err> {
     }
 }
 
-impl<State, Err> Display for TcpListener<State, Err> {
+impl Display for TcpListener {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let http_fmt = |a| format!("http://{}", a);
         match &self.listener {

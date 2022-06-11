@@ -1,11 +1,10 @@
 use http_types::{self, Method, Url};
-use envoy::{self, Response, Result, Context};
 
 #[async_std::test]
-async fn test_missing_param() -> envoy::Result<()> {
-    async fn greet(ctx: Context<()>) -> Result<Response> {
+async fn test_missing_param() -> envoy::Result {
+    async fn greet(ctx: &mut envoy::Context) -> envoy::Result {
         assert_eq!(ctx.param("name")?, "Param \"name\" not found");
-        Ok(Response::new(200))
+        Ok(ctx.res.set_status(http_types::StatusCode::Ok))
     }
 
     let mut server = envoy::new();
@@ -18,10 +17,10 @@ async fn test_missing_param() -> envoy::Result<()> {
 }
 
 #[async_std::test]
-async fn hello_world_parametrized() -> Result<()> {
-    async fn greet(ctx: envoy::Context<()>) -> Result<impl Into<Response>> {
+async fn hello_world_parametrized() -> envoy::Result {
+    async fn greet(ctx: &mut envoy::Context) -> envoy::Result {
         let body = format!("{} says hello", ctx.param("name").unwrap_or("nori"));
-        Ok(Response::builder(200).body(body))
+        Ok(ctx.res.set_body(body))
     }
 
     let mut server = envoy::new();

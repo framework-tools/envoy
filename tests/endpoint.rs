@@ -1,10 +1,13 @@
-use envoy::http::{Method, Request, Url};
-use envoy::Response;
+use envoy::http::{Method, Response, Request, Url};
 
 #[async_std::test]
 async fn should_accept_boxed_endpoints() {
-    fn endpoint() -> Box<dyn envoy::Endpoint<()>> {
-        Box::new(|_| async { Ok("hello world") })
+    fn endpoint() -> Box<dyn envoy::Endpoint> {
+        async fn inner(ctx: &mut envoy::Context) -> envoy::Result {
+            ctx.set_body("hello world");
+            Ok(())
+        }
+        Box::new(inner)
     }
 
     let mut app = envoy::Server::new();

@@ -60,7 +60,7 @@ pub trait ServerTestingExt {
     }
 }
 
-impl<State: Clone + Send + Sync + Unpin + 'static> ServerTestingExt for envoy::Server<State> {
+impl ServerTestingExt for envoy::Server {
     fn client(&self) -> Client {
         let config = Config::new()
             .set_http_client(self.clone())

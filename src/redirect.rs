@@ -17,7 +17,7 @@
 //! ```
 
 use crate::http::headers::LOCATION;
-use crate::{StatusCode, Context, EnvoyErr};
+use crate::{StatusCode, Context};
 use crate::{Endpoint, Response};
 
 /// A redirection endpoint.
@@ -28,7 +28,7 @@ use crate::{Endpoint, Response};
 /// # use envoy::{Response, Redirect, Request, StatusCode};
 /// # fn next_product() -> Option<String> { None }
 /// # #[allow(dead_code)]
-/// async fn route_handler(request: Request<()>) -> envoy::Result {
+/// async fn route_handler(request: Request) -> envoy::Result {
 ///     if let Some(product_url) = next_product() {
 ///         Ok(Redirect::new(product_url).into())
 ///     } else {
@@ -82,33 +82,6 @@ impl<T: AsRef<str>> Redirect<T> {
             status: StatusCode::SeeOther,
             location,
         }
-    }
-}
-
-#[async_trait::async_trait]
-impl<State, T, Err: EnvoyErr> Endpoint<State, Err> for Redirect<T>
-where
-    State: Clone + Send + Sync + 'static,
-    T: AsRef<str> + Send + Sync + 'static,
-{
-    async fn call(&self, _ctx: Context<State>) -> crate::Result<Response> {
-        Ok(self.into())
-    }
-}
-
-impl<T: AsRef<str>> From<Redirect<T>> for Response {
-    fn from(redirect: Redirect<T>) -> Self {
-        Response::builder(redirect.status)
-            .header(LOCATION, redirect.location.as_ref())
-            .build()
-    }
-}
-
-impl<T: AsRef<str>> From<&Redirect<T>> for Response {
-    fn from(redirect: &Redirect<T>) -> Response {
-        Response::builder(redirect.status)
-            .header(LOCATION, redirect.location.as_ref())
-            .build()
     }
 }
 

@@ -74,14 +74,14 @@ struct Animal {
 }
 
 #[async_std::main]
-async fn main() -> envoy::Result<()> {
+async fn main() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/orders/shoes").post(order_shoes);
     app.listen("127.0.0.1:8080").await?;
     Ok(())
 }
 
-async fn order_shoes(mut ctx: Context<()>) -> envoy::Result {
+async fn order_shoes(mut ctx: &mut Context) -> envoy::Result {
     let Animal { name, legs } = ctx.body_json().await?;
     Ok(format!("Hello, {}! I've put in an order for {} shoes", name, legs).into())
 }

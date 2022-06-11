@@ -1,16 +1,24 @@
 mod test_utils;
 use test_utils::ServerTestingExt;
-use envoy::{Error, StatusCode, Context};
+use envoy::{Error, StatusCode, Context, Endpoint};
 
-async fn add_one(ctx: Context<()>) -> Result<String, envoy::Error> {
+struct StringEndpoint(String);
+#[async_trait::async_trait]
+impl Endpoint for StringEndpoint {
+    async fn call(&self, ctx: &mut envoy::Context) -> Result<(), Error> {
+        Ok(ctx.res.set_body(self.0.clone()))
+    }
+}
+
+async fn add_one(ctx: &mut Context) -> envoy::Result {
     let num: i64 = ctx
         .param("num")?
         .parse()
         .map_err(|err| Error::new(StatusCode::BadRequest, err))?;
-    Ok((num + 1).to_string())
+    Ok(ctx.res.set_body((num + 1).to_string()))
 }
 
-async fn add_two(ctx: Context<()>) -> Result<String, envoy::Error> {
+async fn add_two(ctx: &mut Context) -> envoy::Result {
     let one: i64 = ctx
         .param("one")?
         .parse()
@@ -19,25 +27,25 @@ async fn add_two(ctx: Context<()>) -> Result<String, envoy::Error> {
         .param("two")?
         .parse()
         .map_err(|err| Error::new(StatusCode::BadRequest, err))?;
-    Ok((one + two).to_string())
+    Ok(ctx.res.set_body((one + two).to_string()))
 }
 
-async fn echo_param(ctx: Context<()>) -> envoy::Result<envoy::Response> {
-    match ctx.param("param") {
-        Ok(path) => Ok(path.into()),
-        Err(_) => Ok(StatusCode::NotFound.into()),
+async fn echo_param(ctx: &mut envoy::Context) -> envoy::Result {
+    match ctx.param("param").map(|param| param.to_string()) {
+        Ok(path) => Ok(ctx.res.set_body(path)),
+        Err(_) => Ok(ctx.res.set_status(StatusCode::NotFound)),
     }
 }
 
-async fn echo_wildcard(ctx: Context<()>) -> envoy::Result<envoy::Response> {
-    match ctx.wildcard() {
-        Some(path) => Ok(path.into()),
-        None => Ok(StatusCode::NotFound.into()),
+async fn echo_wildcard(ctx: &mut Context) -> envoy::Result {
+    match ctx.wildcard().map(|param| param.to_string()) {
+        Some(path) => Ok(ctx.set_body(path)),
+        None => Ok(ctx.res.set_status(StatusCode::NotFound)),
     }
 }
 
 #[async_std::test]
-async fn param() -> envoy::Result<()> {
+async fn param() -> envoy::Result {
     let mut app = envoy::Server::new();
     app.at("/add_one/:num").get(add_one);
     assert_eq!(app.get("/add_one/3").recv_string().await?, "4");
@@ -46,7 +54,7 @@ async fn param() -> envoy::Result<()> {
 }
 
 #[async_std::test]
-async fn invalid_segment_error() -> envoy::Result<()> {
+async fn invalid_segment_error() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/add_one/:num").get(add_one);
     assert_eq!(
@@ -57,7 +65,7 @@ async fn invalid_segment_error() -> envoy::Result<()> {
 }
 
 #[async_std::test]
-async fn not_found_error() -> envoy::Result<()> {
+async fn not_found_error() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/add_one/:num").get(add_one);
     assert_eq!(app.get("/add_one/").await?.status(), StatusCode::NotFound);
@@ -65,7 +73,7 @@ async fn not_found_error() -> envoy::Result<()> {
 }
 
 #[async_std::test]
-async fn wildcard() -> envoy::Result<()> {
+async fn wildcard() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/echo/*").get(echo_wildcard);
     assert_eq!(app.get("/echo/some_path").recv_string().await?, "some_path");
@@ -79,7 +87,7 @@ async fn wildcard() -> envoy::Result<()> {
 }
 
 #[async_std::test]
-async fn multi_param() -> envoy::Result<()> {
+async fn multi_param() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/add_two/:one/:two/").get(add_two);
     assert_eq!(app.get("/add_two/1/2/").recv_string().await?, "3");
@@ -89,7 +97,7 @@ async fn multi_param() -> envoy::Result<()> {
 }
 
 #[async_std::test]
-async fn wildcard_last_segment() -> envoy::Result<()> {
+async fn wildcard_last_segment() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/echo/:param/*").get(echo_param);
     assert_eq!(app.get("/echo/one/two").recv_string().await?, "one");
@@ -101,10 +109,11 @@ async fn wildcard_last_segment() -> envoy::Result<()> {
 }
 
 #[async_std::test]
-async fn ambiguous_router_wildcard_vs_star() -> envoy::Result<()> {
+async fn ambiguous_router_wildcard_vs_star() -> envoy::Result {
     let mut app = envoy::new();
-    app.at("/:one/:two").get(|_| async { Ok("one/two") });
-    app.at("/posts/*").get(|_| async { Ok("posts/*") });
+
+    app.at("/:one/:two").get(StringEndpoint("one/two".to_string()));
+    app.at("/posts/*").get(StringEndpoint("posts/*".to_string()));
     assert_eq!(app.get("/posts/10").recv_string().await?, "posts/*");
     Ok(())
 }

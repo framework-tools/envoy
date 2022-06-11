@@ -1,5 +1,4 @@
 use routefinder::Captures;
-use crate::Response;
 use crate::http::headers::{HeaderName, HeaderValues, ToHeaderValues};
 use crate::http::{headers, Body, Method, Mime, StatusCode, Url, Version};
 use crate::http::format_err;
@@ -11,117 +10,45 @@ use crate::http::format_err;
 /// as well as some additional information such as the state
 /// and parameters.
 #[derive(Debug)]
-pub struct Context<State> {
-    /// The state of the request.
-    /// Use this to store stuff like database connections, etc.
-    /// or middleware state.
-    pub state: State,
+pub struct Context {
+
     /// The request that was made.
     pub req: crate::http::Request,
     /// The response that will be sent.
     pub res: crate::http::Response,
+    /// Any error captured during the request.
     /// The parsed request parameters
     pub params: Vec<Captures<'static, 'static>>,
 }
 
 
-impl<State> Context<State> {
+impl Context {
     /// Create a new [Context] with a [crate::http::Request].
     pub(crate) fn new(
-        state: State,
+
         req: crate::http::Request,
         params: Vec<Captures<'static, 'static>>,
     ) -> Self {
         Self {
-            state,
             req,
             res: crate::http::Response::new(StatusCode::Ok),
             params,
         }
     }
 
-    /// Create a new [Context] with a [crate::http::Request] and a [crate::http::Response].
-    pub(crate) fn new_with_res(
-        state: State,
-        req: crate::http::Request,
-        params: Vec<Captures<'static, 'static>>,
-        res: crate::http::Response,
-    ) -> Self {
-        Self {
-            state,
-            req,
-            res,
-            params,
-        }
-    }
-
     /// Access the request's HTTP method.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use async_std::task::block_on;
-    /// # fn main() -> Result<(), std::io::Error> { block_on(async {
-    /// #
-    /// use envoy::Context;
-    ///
-    /// let mut app = envoy::new();
-    /// app.at("/").get(|ctx: Context<()>| async move {
-    ///     assert_eq!(ctx.method(), http_types::Method::Get);
-    ///     Ok("")
-    /// });
-    /// app.listen("127.0.0.1:8080").await?;
-    /// #
-    /// # Ok(()) })}
-    /// ```
     #[must_use]
     pub fn method(&self) -> Method {
         self.req.method()
     }
 
     /// Access the request's full URI method.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use async_std::task::block_on;
-    /// # fn main() -> Result<(), std::io::Error> { block_on(async {
-    /// #
-    /// use envoy::Context;
-    ///
-    /// let mut app = envoy::new();
-    /// app.at("/").get(|ctx: Context<()>| async move {
-    ///     assert_eq!(ctx.url(), &"/".parse::<envoy::http::Url>().unwrap());
-    ///     Ok("")
-    /// });
-    /// app.listen("127.0.0.1:8080").await?;
-    /// #
-    /// # Ok(()) })}
-    /// ```
     #[must_use]
     pub fn url(&self) -> &Url {
         self.req.url()
     }
 
     /// Access the request's HTTP version.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use async_std::task::block_on;
-    /// # fn main() -> Result<(), std::io::Error> { block_on(async {
-    /// #
-    /// use envoy::Context;
-    ///
-    /// let mut app = envoy::new();
-    /// app.at("/").get(|ctx: Context<()>| async move {
-    ///     assert_eq!(ctx.version(), Some(http_types::Version::Http1_1));
-    ///     Ok("")
-    /// });
-    /// app.listen("127.0.0.1:8080").await?;
-    /// #
-    /// # Ok(()) })}
-    /// ```
     #[must_use]
     pub fn version(&self) -> Option<Version> {
         self.req.version()
@@ -175,23 +102,6 @@ impl<State> Context<State> {
     }
 
     /// Get an HTTP header.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use async_std::task::block_on;
-    /// # fn main() -> Result<(), std::io::Error> { block_on(async {
-    /// #
-    /// use envoy::Context;
-    ///
-    /// let mut app = envoy::new();
-    /// app.at("/").get(|ctx: Context<()>| async move {
-    ///     assert_eq!(ctx.header("X-Forwarded-For").unwrap(), "127.0.0.1");
-    ///     Ok("")
-    /// });
-    /// app.listen("127.0.0.1:8080").await?;
-    /// #
-    /// # Ok(()) })}
     /// ```
     #[must_use]
     pub fn header(
@@ -270,12 +180,6 @@ impl<State> Context<State> {
         self.req.ext_mut().insert(val)
     }
 
-    #[must_use]
-    ///  Access application scoped state.
-    pub fn state(&self) -> &State {
-        &self.state
-    }
-
     /// Extract and parse a route parameter by name.
     ///
     /// Returns the parameter as a `&str`, borrowed from this `Request`.
@@ -285,28 +189,8 @@ impl<State> Context<State> {
     /// # Errors
     ///
     /// An error is returned if `key` is not a valid parameter for the route.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use async_std::task::block_on;
-    /// # fn main() -> Result<(), std::io::Error> { block_on(async {
-    /// #
-    /// use envoy::{Context, Result};
-    ///
-    /// async fn greet(ctx: Context<()>) -> Result<String> {
-    ///     let name = ctx.param("name").unwrap_or("world");
-    ///     Ok(format!("Hello, {}!", name))
-    /// }
-    ///
-    /// let mut app = envoy::new();
-    /// app.at("/hello").get(greet);
-    /// app.at("/hello/:name").get(greet);
-    /// app.listen("127.0.0.1:8080").await?;
-    /// #
-    /// # Ok(()) })}
-    /// ```
-    pub fn param(&self, key: &str) -> R<&str> {
+
+    pub fn param(&self, key: &str) -> crate::Result<&str> {
         self.params
             .iter()
             .rev()
@@ -317,26 +201,7 @@ impl<State> Context<State> {
     /// Fetch the wildcard from the route, if it exists
     ///
     /// Returns the parameter as a `&str`, borrowed from this `Request`.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use async_std::task::block_on;
-    /// # fn main() -> Result<(), std::io::Error> { block_on(async {
-    /// #
-    /// use envoy::{Context, Result};
-    ///
-    /// async fn greet(ctx: Context<()>) -> Result<String> {
-    ///     let name = ctx.wildcard().unwrap_or("world");
-    ///     Ok(format!("Hello, {}!", name))
-    /// }
-    ///
-    /// let mut app = envoy::new();
-    /// app.at("/hello/*").get(greet);
-    /// app.listen("127.0.0.1:8080").await?;
-    /// #
-    /// # Ok(()) })}
-    /// ```
+
     pub fn wildcard(&self) -> Option<&str> {
         self.params
             .iter()
@@ -346,46 +211,14 @@ impl<State> Context<State> {
 
     /// Parse the URL query component into a struct, using [serde_qs](https://docs.rs/serde_qs). To
     /// get the entire query as an unparsed string, use `request.url().query()`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::collections::HashMap;
-    /// use envoy::http::{self, convert::Deserialize};
-    /// use envoy::Request;
-    ///
-    /// // An owned structure:
-    ///
-    /// #[derive(Deserialize)]
-    /// struct Index {
-    ///     page: u32,
-    ///     selections: HashMap<String, String>,
-    /// }
-    ///
-    /// let req: Request<()> = http::Request::get("https://httpbin.org/get?page=2&selections[width]=narrow&selections[height]=tall").into();
-    /// let Index { page, selections } = req.query().unwrap();
-    /// assert_eq!(page, 2);
-    /// assert_eq!(selections["width"], "narrow");
-    /// assert_eq!(selections["height"], "tall");
-    ///
-    /// // Using borrows:
-    ///
-    /// #[derive(Deserialize)]
-    /// struct Query<'q> {
-    ///     format: &'q str,
-    /// }
-    ///
-    /// let req: Request<()> = http::Request::get("https://httpbin.org/get?format=bananna").into();
-    /// let Query { format } = req.query().unwrap();
-    /// assert_eq!(format, "bananna");
-    /// ```
+
     pub fn query<'de, T: serde::de::Deserialize<'de>>(&'de self) -> crate::Result<T> {
         self.req.query()
     }
 
     /// Set the body reader.
     pub fn set_body(&mut self, body: impl Into<Body>) {
-        self.req.set_body(body)
+        self.res.set_body(body)
     }
 
     /// Take the request body as a `Body`.
@@ -407,25 +240,7 @@ impl<State> Context<State> {
     ///
     /// Any I/O error encountered while reading the body is immediately returned
     /// as an `Err`.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use async_std::task::block_on;
-    /// # fn main() -> Result<(), std::io::Error> { block_on(async {
-    /// #
-    /// use envoy::Context;
-    ///
-    /// let mut app = envoy::new();
-    /// app.at("/").get(|mut ctx: Context<()>| async move {
-    ///     let _body: Vec<u8> = ctx.body_bytes().await.unwrap();
-    ///     Ok("")
-    /// });
-    /// app.listen("127.0.0.1:8080").await?;
-    /// #
-    /// # Ok(()) })}
-    /// ```
-    pub async fn body_bytes(&mut self) -> R<Vec<u8>> {
+    pub async fn body_bytes(&mut self) -> crate::Result<Vec<u8>> {
         let res = self.req.body_bytes().await?;
         Ok(res)
     }
@@ -441,25 +256,8 @@ impl<State> Context<State> {
     /// as an `Err`.
     ///
     /// If the body cannot be interpreted as valid UTF-8, an `Err` is returned.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use async_std::task::block_on;
-    /// # fn main() -> Result<(), std::io::Error> { block_on(async {
-    /// #
-    /// use envoy::Context;
-    ///
-    /// let mut app = envoy::new();
-    /// app.at("/").get(|mut ctx: Context<()>| async move {
-    ///     let _body: String = ctx.body_string().await.unwrap();
-    ///     Ok("")
-    /// });
-    /// app.listen("127.0.0.1:8080").await?;
-    /// #
-    /// # Ok(()) })}
-    /// ```
-    pub async fn body_string(&mut self) -> R<String> {
+
+    pub async fn body_string(&mut self) -> crate::Result<String> {
         let res = self.req.body_string().await?;
         Ok(res)
     }
@@ -473,80 +271,9 @@ impl<State> Context<State> {
     ///
     /// If the body cannot be interpreted as valid json for the target type `T`,
     /// an `Err` is returned.
-    pub async fn body_json<T: serde::de::DeserializeOwned>(&mut self) -> R<T> {
+    pub async fn body_json<T: serde::de::DeserializeOwned>(&mut self) -> crate::Result<T> {
         let res = self.req.body_json().await?;
         Ok(res)
-    }
-
-    /// Parse the request body as a form.
-    ///
-    /// ```rust
-    /// # fn main() -> Result<(), std::io::Error> { async_std::task::block_on(async {
-    /// use envoy::prelude::*;
-    /// let mut app = envoy::new();
-    ///
-    /// #[derive(Deserialize)]
-    /// struct Animal {
-    ///   name: String,
-    ///   legs: u8
-    /// }
-    ///
-    /// app.at("/").post(|mut req: envoy::Context<()>| async move {
-    ///     let animal: Animal = req.body_form().await?;
-    ///     Ok(format!(
-    ///         "hello, {}! i've put in an order for {} shoes",
-    ///         animal.name, animal.legs
-    ///     ))
-    /// });
-    ///
-    /// # if false {
-    /// app.listen("localhost:8000").await?;
-    /// # }
-    ///
-    /// // $ curl localhost:8000/orders/shoes -d "name=chashu&legs=4"
-    /// // hello, chashu! i've put in an order for 4 shoes
-    ///
-    /// // $ curl localhost:8000/orders/shoes -d "name=mary%20millipede&legs=750"
-    /// // number too large to fit in target type
-    /// # Ok(()) })}
-    /// ```
-    pub async fn body_form<T: serde::de::DeserializeOwned>(&mut self) -> R<T> {
-        let res = self.req.body_form().await?;
-        Ok(res)
-    }
-
-    /// returns a `Cookie` by name of the cookie.
-    #[cfg(feature = "cookies")]
-    #[must_use]
-    pub fn cookie(&self, name: &str) -> Option<Cookie<'static>> {
-        self.ext::<CookieData>()
-            .and_then(|cookie_data| cookie_data.content.read().unwrap().get(name).cloned())
-    }
-
-    /// Retrieves a reference to the current session.
-    ///
-    /// # Panics
-    ///
-    /// This method will panic if a envoy::sessions:SessionMiddleware has not
-    /// been run.
-    #[cfg(feature = "sessions")]
-    pub fn session(&self) -> &crate::sessions::Session {
-        self.ext::<crate::sessions::Session>().expect(
-            "request session not initialized, did you enable envoy::sessions::SessionMiddleware?",
-        )
-    }
-
-    /// Retrieves a mutable reference to the current session.
-    ///
-    /// # Panics
-    ///
-    /// This method will panic if a envoy::sessions:SessionMiddleware has not
-    /// been run.
-    #[cfg(feature = "sessions")]
-    pub fn session_mut(&mut self) -> &mut crate::sessions::Session {
-        self.ext_mut().expect(
-            "request session not initialized, did you enable envoy::sessions::SessionMiddleware?",
-        )
     }
 
     /// Get the length of the body stream, if it has been set.
@@ -566,34 +293,26 @@ impl<State> Context<State> {
     }
 }
 
-impl<State> AsRef<crate::http::Request> for Context<State> {
+impl AsRef<crate::http::Request> for Context {
     fn as_ref(&self) -> &crate::http::Request {
         &self.req
     }
 }
 
-impl<State> AsMut<crate::http::Request> for Context<State> {
+impl AsMut<crate::http::Request> for Context {
     fn as_mut(&mut self) -> &mut crate::http::Request {
         &mut self.req
     }
 }
 
-impl<State> AsRef<crate::http::Headers> for Context<State> {
+impl AsRef<crate::http::Headers> for Context {
     fn as_ref(&self) -> &crate::http::Headers {
         self.req.as_ref()
     }
 }
 
-impl<State> AsMut<crate::http::Headers> for Context<State> {
+impl AsMut<crate::http::Headers> for Context {
     fn as_mut(&mut self) -> &mut crate::http::Headers {
         self.req.as_mut()
-    }
-}
-
-impl<State: Clone + Send + Sync + 'static> From<Context<State>> for Response {
-    fn from(mut request: Context<State>) -> Response {
-        let mut res = Response::new(StatusCode::Ok);
-        res.set_body(request.take_body());
-        res
     }
 }

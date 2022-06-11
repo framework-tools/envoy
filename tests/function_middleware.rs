@@ -3,22 +3,22 @@ use envoy::http::{self, url::Url, Method};
 mod test_utils;
 
 async fn auth_middleware<'a>(
-    ctx: envoy::Context<()>,
-    next: envoy::Next<()>,
+    ctx: &mut envoy::Context,
+    next: envoy::Next,
 ) -> envoy::Result {
     let authenticated = match ctx.header("X-Auth") {
         Some(header) => header == "secret_key",
         None => false,
     };
     if authenticated {
-        Ok(next.run(ctx).await)
+        next.run(ctx).await
     } else {
-        Ok(envoy::Response::new(envoy::StatusCode::Unauthorized))
+        Ok(ctx.res.set_status(envoy::StatusCode::Unauthorized))
     }
 }
 
-async fn echo_path<State>(ctx: envoy::Context<State>) -> envoy::Result<String> {
-    Ok(ctx.req.url().path().to_string())
+async fn echo_path(ctx: &mut envoy::Context) -> envoy::Result {
+    Ok(ctx.res.set_body(ctx.req.url().path().to_string()))
 }
 
 #[async_std::test]

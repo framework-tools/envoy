@@ -1,5 +1,5 @@
 use super::Listener;
-use async_std::io;
+use tokio::io;
 
 /// ToListener represents any type that can be converted into a
 /// [`Listener`](crate::listener::Listener).  Any type that implements
@@ -25,31 +25,19 @@ use async_std::io;
 ///
 /// # Specifying multiple listeners:
 /// To bind to any number of listeners concurrently:
-/// ```rust,no_run
-/// # fn main() -> std::io::Result<()> { async_std::task::block_on(async {
-/// # let app = envoy::new();
-/// app.listen(vec!["tcp://localhost:8000", "tcp://localhost:8001"]).await?;
-/// # Ok(()) }) }
-/// ```
 ///
 /// # Multiple socket resolution
 /// If a TCP listener resolves to multiple socket addresses, envoy will
 /// bind to the first successful one. For example, on ipv4+ipv6
 /// systems, `tcp://localhost:1234` resolves both to `127.0.0.1:1234`
 /// (v4) as well as `[::1]:1234` (v6). The order that these are
-/// attempted is platform-determined. To listen on all of the addresses, use
-/// ```rust,no_run
-/// # fn main() -> std::io::Result<()> { async_std::task::block_on(async {
-/// # let app = envoy::new();
-/// use std::net::ToSocketAddrs;
-/// app.listen("localhost:8000".to_socket_addrs()?.collect::<Vec<_>>()).await?;
-/// # Ok(()) }) }
-/// ```
+/// attempted is platform-determined.
+/// 
 /// # Other implementations
 /// See below for additional provided implementations of ToListener.
-pub trait ToListener<State: Clone + Send + Sync + 'static, Err> {
+pub trait ToListener {
     /// What listener are we converting into?
-    type Listener: Listener<State, Err>;
+    type Listener: Listener;
 
     /// Transform self into a
     /// [`Listener`](crate::listener::Listener). Unless self is

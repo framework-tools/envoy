@@ -2,7 +2,7 @@ mod test_utils;
 use test_utils::ServerTestingExt;
 
 #[async_std::test]
-async fn nested() -> envoy::Result<()> {
+async fn nested() -> envoy::Result {
     let mut inner = envoy::new();
     inner.at("/foo").get(|_| async { Ok("foo") });
     inner.at("/bar").get(|_| async { Ok("bar") });
@@ -17,8 +17,8 @@ async fn nested() -> envoy::Result<()> {
 }
 
 #[async_std::test]
-async fn nested_middleware() -> envoy::Result<()> {
-    let echo_path = |ctx: envoy::Context<()>| async move { Ok(ctx.url().path().to_string()) };
+async fn nested_middleware() -> envoy::Result {
+    let echo_path = |ctx: envoy::Context| async move { Ok(ctx.url().path().to_string()) };
     let mut app = envoy::new();
     let mut inner_app = envoy::new();
     inner_app.with(envoy::utils::After(|mut res: envoy::Response| async move {
@@ -48,7 +48,7 @@ async fn nested_middleware() -> envoy::Result<()> {
 }
 
 #[async_std::test]
-async fn nested_with_different_state() -> envoy::Result<()> {
+async fn nested_with_different_state() -> envoy::Result {
     let mut outer = envoy::new();
     let mut inner = envoy::with_state(42);
     inner.at("/").get(|req: envoy::Context<i32>| async move {

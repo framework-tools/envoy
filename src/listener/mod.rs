@@ -2,47 +2,37 @@
 
 mod concurrent_listener;
 mod failover_listener;
-#[cfg(feature = "h1-server")]
 mod parsed_listener;
-#[cfg(feature = "h1-server")]
 mod tcp_listener;
 mod to_listener;
-#[cfg(feature = "h1-server")]
 mod to_listener_impls;
-#[cfg(all(unix, feature = "h1-server"))]
-mod unix_listener;
+mod compat;
 
 use std::fmt::{Debug, Display};
 
-use async_std::io;
+use tokio::io;
 use async_trait::async_trait;
 
-use crate::{Server, EnvoyErr};
+use crate::{Server};
 
 pub use concurrent_listener::ConcurrentListener;
 pub use failover_listener::FailoverListener;
 pub use to_listener::ToListener;
 
-#[cfg(feature = "h1-server")]
+
 pub(crate) use parsed_listener::ParsedListener;
-#[cfg(feature = "h1-server")]
 pub(crate) use tcp_listener::TcpListener;
-#[cfg(all(unix, feature = "h1-server"))]
-pub(crate) use unix_listener::UnixListener;
 
 /// The Listener trait represents an implementation of http transport for a envoy
 /// application. In order to provide a Listener to envoy, you will also need to
 /// implement at least one [`ToListener`](crate::listener::ToListener) that
 /// outputs your Listener type.
 #[async_trait]
-pub trait Listener<State, Err>: Debug + Display + Send + Sync + 'static
-where
-    State: Send + Sync + 'static,
-{
+pub trait Listener: Debug + Display + Send + Sync + 'static {
     /// Bind the listener. This starts the listening process by opening the
     /// necessary network ports, but not yet accepting incoming connections. This
     /// method must be called before `accept`.
-    async fn bind(&mut self, app: Server<State, Err>) -> io::Result<()>;
+    async fn bind(&mut self, app: Server) -> io::Result<()>;
 
     /// Start accepting incoming connections. This method must be called only
     /// after `bind` has succeeded.
@@ -54,12 +44,11 @@ where
 }
 
 #[async_trait]
-impl<L, State, Err: EnvoyErr> Listener<State, Err> for Box<L>
+impl<L> Listener for Box<L>
 where
-    L: Listener<State, Err>,
-    State: Send + Sync + 'static,
+    L: Listener
 {
-    async fn bind(&mut self, app: Server<State, Err>) -> io::Result<()> {
+    async fn bind(&mut self, app: Server) -> io::Result<()> {
         self.as_mut().bind(app).await
     }
 
@@ -75,7 +64,7 @@ where
 /// crate-internal shared logic used by tcp and unix listeners to
 /// determine if an io::Error needs a backoff delay. Transient error
 /// types do not require a delay.
-#[cfg(feature = "h1-server")]
+
 pub(crate) fn is_transient_error(e: &io::Error) -> bool {
     use io::ErrorKind::*;
 

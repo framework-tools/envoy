@@ -14,24 +14,24 @@ impl TestMiddleware {
 }
 
 #[async_trait::async_trait]
-impl<State: Clone + Send + Sync + 'static> Middleware<State> for TestMiddleware {
+impl Middleware for TestMiddleware {
     async fn handle(
         &self,
-        req: envoy::Context<State>,
-        next: envoy::Next<State>,
-    ) -> envoy::Result<envoy::Response> {
-        let mut res = next.run(req).await;
-        res.insert_header(self.0.clone(), self.1);
-        Ok(res)
+        ctx: &mut envoy::Context,
+        next: envoy::Next,
+    ) -> envoy::Result {
+        let res = next.run(ctx).await;
+        ctx.res.insert_header(self.0.clone(), self.1);
+        res
     }
 }
 
-async fn echo_path<State>(req: envoy::Context<State>) -> envoy::Result<String> {
-    Ok(req.url().path().to_string())
+async fn echo_path(ctx: &mut envoy::Context) -> envoy::Result {
+    Ok(ctx.res.set_body(ctx.req.url().path().to_string()))
 }
 
 #[async_std::test]
-async fn route_middleware() -> envoy::Result<()> {
+async fn route_middleware() -> envoy::Result {
     let mut app = envoy::new();
     let mut foo_route = app.at("/foo");
     foo_route // /foo
@@ -57,7 +57,7 @@ async fn route_middleware() -> envoy::Result<()> {
 }
 
 #[async_std::test]
-async fn app_and_route_middleware() -> envoy::Result<()> {
+async fn app_and_route_middleware() -> envoy::Result {
     let mut app = envoy::new();
     app.with(TestMiddleware::with_header_name("X-Root", "root"));
     app.at("/foo")
@@ -80,7 +80,7 @@ async fn app_and_route_middleware() -> envoy::Result<()> {
 }
 
 #[async_std::test]
-async fn nested_app_with_route_middleware() -> envoy::Result<()> {
+async fn nested_app_with_route_middleware() -> envoy::Result {
     let mut inner = envoy::new();
     inner.with(TestMiddleware::with_header_name("X-Inner", "inner"));
     inner
@@ -114,7 +114,7 @@ async fn nested_app_with_route_middleware() -> envoy::Result<()> {
 }
 
 #[async_std::test]
-async fn subroute_not_nested() -> envoy::Result<()> {
+async fn subroute_not_nested() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/parent") // /parent
         .with(TestMiddleware::with_header_name("X-Parent", "Parent"))

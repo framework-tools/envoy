@@ -1,11 +1,10 @@
 //! An HTTP server
 
-use async_std::io;
-use async_std::sync::Arc;
+use std::sync::Arc;
 
-#[cfg(feature = "cookies")]
+use tokio::io;
+
 use crate::listener::{Listener, ToListener};
-use crate::{EnvoyErr};
 use crate::middleware::{Middleware, Next};
 use crate::router::{Router, Selection};
 use crate::{Endpoint, Route};
@@ -25,9 +24,8 @@ use crate::{Endpoint, Route};
 /// - Middleware extends the base Envoy framework with additional request or
 /// response processing, such as compression, default headers, or logging. To
 /// add middleware to an app, use the [`Server::with`] method.
-pub struct Server<State, Err> {
-    router: Arc<Router<State, Err>>,
-    state: State,
+pub struct Server {
+    router: Arc<Router>,
     /// Holds the middleware stack.
     ///
     /// Note(Fishrock123): We do actually want this structure.
@@ -36,79 +34,28 @@ pub struct Server<State, Err> {
     /// The inner Arc-s allow MiddlewareEndpoint-s to be cloned internally.
     /// We don't use a Mutex around the Vec here because adding a middleware during execution should be an error.
     #[allow(clippy::rc_buffer)]
-    middleware: Arc<Vec<Arc<dyn Middleware<State, Err>>>>,
+    middleware: Arc<Vec<Arc<dyn Middleware>>>,
 }
 
-impl<Err: EnvoyErr> Server<(), Err> {
+impl Server {
     /// Create a new Envoy server.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use async_std::task::block_on;
-    /// # fn main() -> Result<(), std::io::Error> { block_on(async {
-    /// #
-    /// let mut app = envoy::new();
-    /// app.at("/").get(|_| async { Ok("Hello, world!") });
-    /// app.listen("127.0.0.1:8080").await?;
-    /// #
-    /// # Ok(()) }) }
-    /// ```
     #[must_use]
     pub fn new() -> Self {
-        Self::with_state(())
+        Self {
+            router: Arc::new(Router::new()),
+            middleware: Arc::new(Vec::new()),
+        }
     }
 }
 
-impl<Err: EnvoyErr> Default for Server<(), Err> {
+impl Default for Server {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<State, Err: EnvoyErr> Server<State, Err>
-where
-    State: Clone + Send + Sync + 'static,
-{
-    /// Create a new Envoy server with shared application scoped state.
-    ///
-    /// Application scoped state is useful for storing items
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use async_std::task::block_on;
-    /// # fn main() -> Result<(), std::io::Error> { block_on(async {
-    /// #
-    /// use envoy::Context;
-    ///
-    /// /// The shared application state.
-    /// #[derive(Clone)]
-    /// struct State {
-    ///     name: String,
-    /// }
-    ///
-    /// // Define a new instance of the state.
-    /// let state = State {
-    ///     name: "Nori".to_string()
-    /// };
-    ///
-    /// // Initialize the application with state.
-    /// let mut app = envoy::with_state(state);
-    /// app.at("/").get(|ctx: Context<State>| async move {
-    ///     Ok(format!("Hello, {}!", &ctx.state().name))
-    /// });
-    /// app.listen("127.0.0.1:8080").await?;
-    /// #
-    /// # Ok(()) }) }
-    /// ```
-    pub fn with_state(state: State) -> Self {
-        Self {
-            router: Arc::new(Router::new()),
-            middleware: Arc::new(Vec::new()),
-            state,
-        }
-    }
+impl Server {
+
 
     /// Add a new route at the given `path`, relative to root.
     ///
@@ -116,12 +63,7 @@ where
     /// a "table of contents" approach, which makes it easy to see the overall
     /// app structure. Endpoints are selected solely by the path and HTTP method
     /// of a request: the path determines the resource and the HTTP verb the
-    /// respective endpoint of the selected resource. Example:
-    ///
-    /// ```rust,no_run
-    /// # let mut app = envoy::Server::new();
-    /// app.at("/").get(|_| async { Ok("Hello, world!") });
-    /// ```
+    /// respective endpoint of the selected resource.
     ///
     /// A path is comprised of zero or many segments, i.e. non-empty strings
     /// separated by '/'. There are two kinds of segments: concrete and
@@ -156,7 +98,7 @@ where
     /// There is no fallback route matching, i.e. either a resource is a full
     /// match or not, which means that the order of adding resources has no
     /// effect.
-    pub fn at<'a>(&'a mut self, path: &str) -> Route<'a, State, Err> {
+    pub fn at<'a>(&'a mut self, path: &str) -> Route<'a> {
         let router = Arc::get_mut(&mut self.router)
             .expect("Registering routes is not possible after the Server has started");
         Route::new(router, path.to_owned())
@@ -171,9 +113,7 @@ where
     ///
     /// Middleware can only be added at the "top level" of an application, and is processed in the
     /// order in which it is applied.
-    pub fn with<M>(&mut self, middleware: M) -> &mut Self
-    where
-        M: Middleware<State, Err>,
+    pub fn with(&mut self, middleware: impl Middleware + 'static) -> &mut Self
     {
         tracing::trace!("Adding middleware {}", middleware.name());
         let m = Arc::get_mut(&mut self.middleware)
@@ -186,20 +126,7 @@ where
     ///
     /// This is a shorthand for calling `Server::bind`, logging the `ListenInfo`
     /// instances from `Listener::info`, and then calling `Listener::accept`.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use async_std::task::block_on;
-    /// # fn main() -> Result<(), std::io::Error> { block_on(async {
-    /// #
-    /// let mut app = envoy::new();
-    /// app.at("/").get(|_| async { Ok("Hello, world!") });
-    /// app.listen("127.0.0.1:8080").await?;
-    /// #
-    /// # Ok(()) }) }
-    /// ```
-    pub async fn listen<L: ToListener<State, Err>>(self, listener: L) -> io::Result<()> {
+    pub async fn listen<L: ToListener>(self, listener: L) -> io::Result<()> {
         let mut listener = listener.to_listener()?;
         listener.bind(self).await?;
         for info in listener.info().iter() {
@@ -219,29 +146,10 @@ where
     /// When calling `Listener::info` multiple `ListenInfo` instances may be
     /// returned. This is useful when using for example `ConcurrentListener`
     /// which enables a single server to listen on muliple ports.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use async_std::task::block_on;
-    /// # fn main() -> Result<(), std::io::Error> { block_on(async {
-    /// #
-    /// use envoy::prelude::*;
-    ///
-    /// let mut app = envoy::new();
-    /// app.at("/").get(|_| async { Ok("Hello, world!") });
-    /// let mut listener = app.bind("127.0.0.1:8080").await?;
-    /// for info in listener.info().iter() {
-    ///     println!("Server listening on {}", info);
-    /// }
-    /// listener.accept().await?;
-    /// #
-    /// # Ok(()) }) }
-    /// ```
-    pub async fn bind<L: ToListener<State, Err>>(
+    pub async fn bind<L: ToListener>(
         self,
         listener: L,
-    ) -> io::Result<<L as ToListener<State, Err>>::Listener> {
+    ) -> io::Result<<L as ToListener>::Listener> {
         let mut listener = listener.to_listener()?;
         listener.bind(self).await?;
         Ok(listener)
@@ -251,25 +159,6 @@ where
     ///
     /// This method is useful for testing endpoints directly,
     /// or for creating servers over custom transports.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # #[async_std::main]
-    /// # async fn main() -> http_types::Result<()> {
-    /// #
-    /// use envoy::http::{Url, Method, Request, Response};
-    ///
-    /// let mut app = envoy::new();
-    /// app.at("/").get(|_| async { Ok("hello world") });
-    ///
-    /// let req = Request::new(Method::Get, Url::parse("https://example.com")?);
-    /// let res: Response = app.respond(req).await?;
-    ///
-    /// assert_eq!(res.status(), 200);
-    /// #
-    /// # Ok(()) }
-    /// ```
     pub async fn respond<Req, Res>(&self, req: Req) -> http_types::Result<Res>
     where
         Req: Into<http_types::Request>,
@@ -278,83 +167,61 @@ where
         let req = req.into();
         let Self {
             router,
-            state,
             middleware,
         } = self.clone();
 
         let method = req.method().to_owned();
         let Selection { endpoint, params } = router.route(req.url().path(), method);
         let route_params = vec![params];
-        let ctx = crate::Context::new(state, req, route_params);
+        let mut ctx = crate::Context::new(req, route_params);
 
         let next = Next::new(endpoint, middleware);
 
-        let res = next.run(ctx).await;
-        let res: http_types::Response = res.into();
-        Ok(res.into())
+        if let Err(err) = next.run(&mut ctx).await {
+            ctx.res.set_body(err.to_string());
+            ctx.res.set_status(err.status());
+        }
+
+        Ok(ctx.res.into())
     }
 
-    /// Gets a reference to the server's state. This is useful for testing and nesting:
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # #[derive(Clone)] struct SomeAppState;
-    /// let mut app = envoy::with_state(SomeAppState);
-    /// let mut admin = envoy::with_state(app.state().clone());
-    /// admin.at("/").get(|_| async { Ok("nested app with cloned state") });
-    /// app.at("/").nest(admin);
-    /// ```
-    pub fn state(&self) -> &State {
-        &self.state
-    }
 }
 
-impl<State: Send + Sync + 'static, Err> std::fmt::Debug for Server<State, Err> {
+impl std::fmt::Debug for Server {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Server").finish()
     }
 }
 
-impl<State: Clone, Err> Clone for Server<State, Err> {
+impl Clone for Server {
     fn clone(&self) -> Self {
         Self {
             router: self.router.clone(),
-            state: self.state.clone(),
             middleware: self.middleware.clone(),
         }
     }
 }
 
 #[async_trait::async_trait]
-impl<State: Clone + Sync + Send + 'static, InnerState: Clone + Sync + Send + 'static, Err: EnvoyErr>
-    Endpoint<State, Err> for Server<InnerState, Err>
+impl Endpoint for Server
 {
-    async fn call(&self, ctx: crate::Context<State>) -> crate::Result<Err> {
-        let crate::Context {
-            req,
-            res,
-            params: mut route_params,
-            ..
-        } = ctx;
-        let path = req.url().path().to_owned();
-        let method = req.method().to_owned();
+    async fn call(&self, ctx: &mut crate::Context) -> crate::Result {
+        let path = ctx.req.url().path().to_owned();
+        let method = ctx.req.method().to_owned();
         let router = self.router.clone();
         let middleware = self.middleware.clone();
-        let state = self.state.clone();
 
         let Selection { endpoint, params } = router.route(&path, method);
-        route_params.push(params);
-        let ctx = crate::Context::new_with_res(state, req, route_params, res);
+        ctx.params.push(params);
 
         let next = Next::new(endpoint, middleware);
 
-        Ok(next.run(ctx).await)
+        next.run(ctx).await
     }
 }
 
-#[crate::utils::async_trait]
-impl<State: Clone + Send + Sync + Unpin + 'static, Err: EnvoyErr> http_client::HttpClient for Server<State, Err> {
+#[async_trait::async_trait]
+impl http_client::HttpClient for Server {
     async fn send(&self, req: crate::http::Request) -> crate::http::Result<crate::http::Response> {
         self.respond(req).await
     }
@@ -366,14 +233,7 @@ mod test {
 
     #[test]
     fn allow_nested_server_with_same_state() {
-        let inner = envoy::new::<()>();
-        let mut outer = envoy::new();
-        outer.at("/foo").get(inner);
-    }
-
-    #[test]
-    fn allow_nested_server_with_different_state() {
-        let inner = envoy::with_state::<i32, ()>(1);
+        let inner = envoy::new();
         let mut outer = envoy::new();
         outer.at("/foo").get(inner);
     }
