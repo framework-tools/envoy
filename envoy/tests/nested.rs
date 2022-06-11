@@ -1,7 +1,7 @@
 mod test_utils;
 use test_utils::ServerTestingExt;
 
-#[async_std::test]
+#[tokio::test]
 async fn nested() -> envoy::Result {
     let mut inner = envoy::new();
     inner.at("/foo").get(|_| async { Ok("foo") });
@@ -16,7 +16,7 @@ async fn nested() -> envoy::Result {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn nested_middleware() -> envoy::Result {
     let echo_path = |ctx: envoy::Context| async move { Ok(ctx.url().path().to_string()) };
     let mut app = envoy::new();
@@ -47,7 +47,7 @@ async fn nested_middleware() -> envoy::Result {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn nested_with_different_state() -> envoy::Result {
     let mut outer = envoy::new();
     let mut inner = envoy::with_state(42);

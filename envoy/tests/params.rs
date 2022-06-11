@@ -1,6 +1,6 @@
 use http_types::{self, Method, Url};
 
-#[async_std::test]
+#[tokio::test]
 async fn test_missing_param() -> envoy::Result {
     async fn greet(ctx: &mut envoy::Context) -> envoy::Result {
         assert_eq!(ctx.param("name")?, "Param \"name\" not found");
@@ -16,7 +16,7 @@ async fn test_missing_param() -> envoy::Result {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn hello_world_parametrized() -> envoy::Result {
     async fn greet(ctx: &mut envoy::Context) -> envoy::Result {
         let body = format!("{} says hello", ctx.param("name").unwrap_or("nori"));

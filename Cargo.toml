@@ -1,52 +1,5 @@
-[package]
-name = "envoy"
-version = "0.1.0"
-description = "A minimal and pragmatic Rust web application framework built for rapid development"
-documentation = "https://docs.rs/envoy"
-keywords = ["envoy", "http", "web", "framework", "async"]
-categories = [
-  "network-programming",
-  "asynchronous",
-  "web-programming::http-server"
+[workspace]
+
+members = [
+    "envoy"
 ]
-edition = "2018"
-license = "MIT OR Apache-2.0"
-readme = "README.md"
-repository = "https://github.com/framework-tools/envoy"
-
-[features]
-docs = ["unstable"]
-unstable = []
-
-[dependencies]
-async-h1 = { version = "2.3.0", optional = false }
-async-std = { version = "1.6.5", features = ["unstable"] }
-tokio-util = { version = "0.7.2", features = ["compat"]}
-async-trait = "0.1.41"
-tracing = "0.1.33"
-femme = { version = "2.1.1", optional = true }
-futures-util = "0.3.6"
-http-client = { version = "6.1.0", default-features = false }
-http-types = { version = "2.11.0", default-features = false, features = ["fs"] }
-pin-project-lite = "0.2.0"
-serde = "1.0.117"
-serde_json = "1.0.59"
-routefinder = "0.5.0"
-async_fn_traits = "0.1.1"
-tokio = { version = "1.18.2", features = ["net"] }
-
-[dev-dependencies]
-tokio = { version = "1.18.2", features = ["macros", "rt-multi-thread"]}
-async-std = { version = "1.6.5", features = ["unstable", "attributes"] }
-criterion = "0.3.3"
-lazy_static = "1.4.0"
-logtest = "2.0.0"
-portpicker = "0.1.0"
-serde = { version = "1.0.117", features = ["derive"] }
-surf = { version = "2.0.0", default-features = false, features = ["h1-client"] }
-tempfile = "3.1.0"
-
-[[test]]
-name = "nested"
-path = "tests/nested.rs"
-required-features = ["unstable"]

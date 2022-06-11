@@ -44,7 +44,7 @@ async fn echo_wildcard(ctx: &mut Context) -> envoy::Result {
     }
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn param() -> envoy::Result {
     let mut app = envoy::Server::new();
     app.at("/add_one/:num").get(add_one);
@@ -53,7 +53,7 @@ async fn param() -> envoy::Result {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn invalid_segment_error() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/add_one/:num").get(add_one);
@@ -64,7 +64,7 @@ async fn invalid_segment_error() -> envoy::Result {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn not_found_error() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/add_one/:num").get(add_one);
@@ -72,7 +72,7 @@ async fn not_found_error() -> envoy::Result {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn wildcard() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/echo/*").get(echo_wildcard);
@@ -86,7 +86,7 @@ async fn wildcard() -> envoy::Result {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn multi_param() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/add_two/:one/:two/").get(add_two);
@@ -96,7 +96,7 @@ async fn multi_param() -> envoy::Result {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn wildcard_last_segment() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/echo/:param/*").get(echo_param);
@@ -108,7 +108,7 @@ async fn wildcard_last_segment() -> envoy::Result {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn ambiguous_router_wildcard_vs_star() -> envoy::Result {
     let mut app = envoy::new();
 

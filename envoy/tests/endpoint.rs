@@ -1,6 +1,6 @@
 use envoy::http::{Method, Response, Request, Url};
 
-#[async_std::test]
+#[tokio::test]
 async fn should_accept_boxed_endpoints() {
     fn endpoint() -> Box<dyn envoy::Endpoint> {
         async fn inner(ctx: &mut envoy::Context) -> envoy::Result {

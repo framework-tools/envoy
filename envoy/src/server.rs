@@ -2,9 +2,6 @@
 
 use std::sync::Arc;
 
-use tokio::io;
-
-use crate::listener::{Listener, ToListener};
 use crate::middleware::{Middleware, Next};
 use crate::router::{Router, Selection};
 use crate::{Endpoint, Route};
@@ -120,39 +117,6 @@ impl Server {
             .expect("Registering middleware is not possible after the Server has started");
         m.push(Arc::new(middleware));
         self
-    }
-
-    /// Asynchronously serve the app with the supplied listener.
-    ///
-    /// This is a shorthand for calling `Server::bind`, logging the `ListenInfo`
-    /// instances from `Listener::info`, and then calling `Listener::accept`.
-    pub async fn listen<L: ToListener>(self, listener: L) -> io::Result<()> {
-        let mut listener = listener.to_listener()?;
-        listener.bind(self).await?;
-        for info in listener.info().iter() {
-            tracing::info!("Server listening on {}", info);
-        }
-        listener.accept().await?;
-        Ok(())
-    }
-
-    /// Asynchronously bind the listener.
-    ///
-    /// Bind the listener. This starts the listening process by opening the
-    /// necessary network ports, but not yet accepting incoming connections.
-    /// `Listener::listen` should be called after this to start accepting
-    /// connections.
-    ///
-    /// When calling `Listener::info` multiple `ListenInfo` instances may be
-    /// returned. This is useful when using for example `ConcurrentListener`
-    /// which enables a single server to listen on muliple ports.
-    pub async fn bind<L: ToListener>(
-        self,
-        listener: L,
-    ) -> io::Result<<L as ToListener>::Listener> {
-        let mut listener = listener.to_listener()?;
-        listener.bind(self).await?;
-        Ok(listener)
     }
 
     /// Respond to a `Request` with a `Response`.

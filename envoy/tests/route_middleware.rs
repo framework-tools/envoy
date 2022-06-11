@@ -30,7 +30,7 @@ async fn echo_path(ctx: &mut envoy::Context) -> envoy::Result {
     Ok(ctx.res.set_body(ctx.req.url().path().to_string()))
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn route_middleware() -> envoy::Result {
     let mut app = envoy::new();
     let mut foo_route = app.at("/foo");
@@ -56,7 +56,7 @@ async fn route_middleware() -> envoy::Result {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn app_and_route_middleware() -> envoy::Result {
     let mut app = envoy::new();
     app.with(TestMiddleware::with_header_name("X-Root", "root"));
@@ -79,7 +79,7 @@ async fn app_and_route_middleware() -> envoy::Result {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn nested_app_with_route_middleware() -> envoy::Result {
     let mut inner = envoy::new();
     inner.with(TestMiddleware::with_header_name("X-Inner", "inner"));
@@ -113,7 +113,7 @@ async fn nested_app_with_route_middleware() -> envoy::Result {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn subroute_not_nested() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/parent") // /parent

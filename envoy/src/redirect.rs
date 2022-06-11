@@ -3,7 +3,7 @@
 //! # Examples
 //!
 //! ```no_run
-//! # use async_std::task::block_on;
+//! # use tokio::task::block_on;
 //! # fn main() -> Result<(), std::io::Error> { block_on(async {
 //! #
 //! use envoy::Redirect;

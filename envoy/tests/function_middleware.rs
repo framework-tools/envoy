@@ -21,7 +21,7 @@ async fn echo_path(ctx: &mut envoy::Context) -> envoy::Result {
     Ok(ctx.res.set_body(ctx.req.url().path().to_string()))
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn route_middleware() {
     let mut app = envoy::new();
     app.at("/protected").with(auth_middleware).get(echo_path);
@@ -60,7 +60,7 @@ async fn route_middleware() {
     assert_eq!(res.status(), envoy::StatusCode::Ok);
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn app_middleware() {
     let mut app = envoy::new();
     app.with(auth_middleware);

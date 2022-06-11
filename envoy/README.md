@@ -73,7 +73,7 @@ struct Animal {
     legs: u16,
 }
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> envoy::Result {
     let mut app = envoy::new();
     app.at("/orders/shoes").post(order_shoes);
