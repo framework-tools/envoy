@@ -1,5 +1,5 @@
 [workspace]
 
 members = [
-    "envoy"
+    "envoy_http"
 ]

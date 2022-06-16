@@ -54,23 +54,22 @@
 #![doc(html_favicon_url = "https://yoshuawuyts.com/assets/http-rs/favicon.ico")]
 #![doc(html_logo_url = "https://yoshuawuyts.com/assets/http-rs/logo-rounded.png")]
 
-
 mod context;
 mod endpoint;
+mod error;
 mod middleware;
 mod route;
 mod router;
 mod server;
-pub mod convert;
-pub mod prelude;
 
+pub use context::Context;
 pub use endpoint::Endpoint;
+pub use error::Error;
 pub use middleware::{Middleware, Next};
 pub use route::Route;
 pub use server::Server;
-pub use context::Context;
 
-pub use http_types::{self as http, Body, Error, Status, StatusCode};
+pub use hyper::{body, http, Body, HeaderMap, Method, Request, Response, StatusCode, Uri, Version};
 
 /// Create a new Envoy server.
 #[must_use]
@@ -79,4 +78,4 @@ pub fn new() -> server::Server {
 }
 
 /// A specialized Result type for Envoy.
-pub type Result<T = ()> = std::result::Result<T, crate::http::Error>;
+pub type Result<T = Response<Body>> = std::result::Result<T, crate::Error>;

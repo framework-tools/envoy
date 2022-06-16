@@ -1,5 +1,5 @@
 mod test_utils;
-use http_types::headers::HeaderName;
+use hyper::headers::HeaderName;
 use std::convert::TryInto;
 use test_utils::ServerTestingExt;
 use envoy::Middleware;

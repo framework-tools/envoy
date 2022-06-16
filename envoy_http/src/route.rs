@@ -1,5 +1,8 @@
 use std::fmt::Debug;
+use std::str::FromStr;
 use std::sync::Arc;
+
+use hyper::Uri;
 
 use crate::endpoint::MiddlewareEndpoint;
 use crate::{router::Router, Endpoint, Middleware};
@@ -92,7 +95,7 @@ impl<'a> Route<'a> {
     }
 
     /// Add an endpoint for the given HTTP method
-    pub fn method(&mut self, method: http_types::Method, ep: impl Endpoint + 'static) -> &mut Self {
+    pub fn method(&mut self, method: hyper::Method, ep: impl Endpoint + 'static) -> &mut Self {
         if self.prefix {
             let ep = StripPrefixEndpoint::new(ep);
             let wildcard = self.at("*");
@@ -133,55 +136,55 @@ impl<'a> Route<'a> {
 
     /// Add an endpoint for `GET` requests
     pub fn get(&mut self, ep: impl Endpoint + 'static) -> &mut Self {
-        self.method(http_types::Method::Get, ep);
+        self.method(hyper::Method::GET, ep);
         self
     }
 
     /// Add an endpoint for `HEAD` requests
     pub fn head(&mut self, ep: impl Endpoint + 'static) -> &mut Self {
-        self.method(http_types::Method::Head, ep);
+        self.method(hyper::Method::HEAD, ep);
         self
     }
 
     /// Add an endpoint for `PUT` requests
     pub fn put(&mut self, ep: impl Endpoint + 'static) -> &mut Self {
-        self.method(http_types::Method::Put, ep);
+        self.method(hyper::Method::PUT, ep);
         self
     }
 
     /// Add an endpoint for `POST` requests
     pub fn post(&mut self, ep: impl Endpoint + 'static) -> &mut Self {
-        self.method(http_types::Method::Post, ep);
+        self.method(hyper::Method::POST, ep);
         self
     }
 
     /// Add an endpoint for `DELETE` requests
     pub fn delete(&mut self, ep: impl Endpoint + 'static) -> &mut Self {
-        self.method(http_types::Method::Delete, ep);
+        self.method(hyper::Method::DELETE, ep);
         self
     }
 
     /// Add an endpoint for `OPTIONS` requests
     pub fn options(&mut self, ep: impl Endpoint + 'static) -> &mut Self {
-        self.method(http_types::Method::Options, ep);
+        self.method(hyper::Method::OPTIONS, ep);
         self
     }
 
     /// Add an endpoint for `CONNECT` requests
     pub fn connect(&mut self, ep: impl Endpoint + 'static) -> &mut Self {
-        self.method(http_types::Method::Connect, ep);
+        self.method(hyper::Method::CONNECT, ep);
         self
     }
 
     /// Add an endpoint for `PATCH` requests
     pub fn patch(&mut self, ep: impl Endpoint + 'static) -> &mut Self {
-        self.method(http_types::Method::Patch, ep);
+        self.method(hyper::Method::PATCH, ep);
         self
     }
 
     /// Add an endpoint for `TRACE` requests
     pub fn trace(&mut self, ep: impl Endpoint + 'static) -> &mut Self {
-        self.method(http_types::Method::Trace, ep);
+        self.method(hyper::Method::TRACE, ep);
         self
     }
 }
@@ -213,7 +216,8 @@ impl Endpoint for StripPrefixEndpoint
             .find_map(|captures| captures.wildcard())
             .unwrap_or_default();
 
-        ctx.req.url_mut().set_path(rest);
+        *ctx.req.uri_mut() = Uri::from_str(rest)
+            .map_err(|err| anyhow::anyhow!("InvalidUri: {:#?}", err))?;
 
         self.0
             .call(ctx)

@@ -26,7 +26,7 @@ async fn hello_world() -> envoy::Result {
         let mut app = envoy::new();
         app.at("/").get(PortEndpoint(port));
         app.listen(("localhost", port)).await?;
-        Result::<(), http_types::Error>::Ok(())
+        Result::<(), hyper::Error>::Ok(())
     });
 
     let client = task::spawn(async move {
@@ -55,7 +55,7 @@ async fn echo_server() -> envoy::Result {
         app.at("/").get(echo);
 
         app.listen(("localhost", port)).await?;
-        Result::<(), http_types::Error>::Ok(())
+        Result::<(), hyper::Error>::Ok(())
     });
 
     let client = task::spawn(async move {
@@ -91,7 +91,7 @@ async fn json() -> envoy::Result {
         let mut app = envoy::new();
         app.at("/").get(increment_counter);
         app.listen(("localhost", port)).await?;
-        Result::<(), http_types::Error>::Ok(())
+        Result::<(), hyper::Error>::Ok(())
     });
 
     let client = task::spawn(async move {

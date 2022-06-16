@@ -1,8 +1,8 @@
 [package]
-name = "envoy"
-version = "0.1.0"
+name = "envoy_http"
+version = "0.0.9"
 description = "A minimal and pragmatic Rust web application framework built for rapid development"
-documentation = "https://docs.rs/envoy"
+documentation = "https://docs.rs/envoy_http"
 keywords = ["envoy", "http", "web", "framework", "async"]
 categories = [
   "network-programming",
@@ -17,21 +17,17 @@ repository = "https://github.com/framework-tools/envoy"
 [features]
 
 [dependencies]
-async-h1 = { version = "2.3.0", optional = false }
-async-std = { version = "1.6.5", features = ["unstable"] }
 tokio-util = { version = "0.7.2", features = ["compat"]}
 async-trait = "0.1.41"
 tracing = "0.1.33"
-femme = { version = "2.1.1", optional = true }
-futures-util = "0.3.6"
-http-client = { version = "6.1.0", default-features = false }
-http-types = { version = "2.11.0", default-features = false, features = ["fs"] }
 pin-project-lite = "0.2.0"
 serde = "1.0.117"
 serde_json = "1.0.59"
 routefinder = "0.5.0"
 async_fn_traits = "0.1.1"
 tokio = { version = "1.18.2", features = ["net"] }
+hyper = { version = "0.14.19", features = ["full"] }
+anyhow = "1.0.57"
 
 [dev-dependencies]
 tokio = { version = "1.18.2", features = ["macros", "rt-multi-thread"]}
@@ -41,5 +37,4 @@ lazy_static = "1.4.0"
 logtest = "2.0.0"
 portpicker = "0.1.0"
 serde = { version = "1.0.117", features = ["derive"] }
-surf = { version = "2.0.0", default-features = false, features = ["h1-client"] }
 tempfile = "3.1.0"

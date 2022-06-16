@@ -1,8 +1,8 @@
 use std::fmt::Debug;
+use std::future::Future;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures_util::Future;
 
 use crate::middleware::{Next};
 use crate::{Middleware};

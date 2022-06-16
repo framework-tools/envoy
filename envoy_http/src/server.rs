@@ -1,5 +1,6 @@
 //! An HTTP server
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use crate::middleware::{Middleware, Next};
@@ -123,30 +124,52 @@ impl Server {
     ///
     /// This method is useful for testing endpoints directly,
     /// or for creating servers over custom transports.
-    pub async fn respond<Req, Res>(&self, req: Req) -> http_types::Result<Res>
+    pub async fn respond<Req, Res>(self, req: Req) -> hyper::Result<Res>
     where
-        Req: Into<http_types::Request>,
-        Res: From<http_types::Response>,
+        Req: Into<hyper::Request<hyper::Body>>,
+        Res: From<hyper::Response<hyper::Body>>,
     {
-        let req = req.into();
+        let req: hyper::Request<hyper::Body> = req.into();
         let Self {
             router,
             middleware,
         } = self.clone();
 
         let method = req.method().to_owned();
-        let Selection { endpoint, params } = router.route(req.url().path(), method);
+        let Selection { endpoint, params } = router.route(req.uri().path(), method);
         let route_params = vec![params];
         let mut ctx = crate::Context::new(req, route_params);
 
         let next = Next::new(endpoint, middleware);
 
-        if let Err(err) = next.run(&mut ctx).await {
-            ctx.res.set_body(err.to_string());
-            ctx.res.set_status(err.status());
+        match next.run(&mut ctx).await {
+            Ok(res) => Ok(res.into()),
+            Err(e) => {
+                let res = hyper::Response::builder()
+                    .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(hyper::Body::from(format!("{}", e)))
+                    .unwrap();
+                Ok(res.into())
+            }
         }
+    }
 
-        Ok(ctx.res.into())
+    /// Start the server.
+    pub async fn listen(self, port: u16) -> Result<(), crate::Error> {
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+
+        let make_svc = hyper::service::make_service_fn(move |_conn|{
+            let server = self.clone();
+            async move {
+                Ok::<_, hyper::Error>(hyper::service::service_fn(move |req| server.clone().respond(req)))
+            }
+        });
+
+        let server = hyper::Server::bind(&addr).serve(make_svc);
+
+        server.await?;
+
+        Ok(())
     }
 
 }
@@ -170,7 +193,7 @@ impl Clone for Server {
 impl Endpoint for Server
 {
     async fn call(&self, ctx: &mut crate::Context) -> crate::Result {
-        let path = ctx.req.url().path().to_owned();
+        let path = ctx.req.uri().path().to_owned();
         let method = ctx.req.method().to_owned();
         let router = self.router.clone();
         let middleware = self.middleware.clone();
@@ -181,13 +204,6 @@ impl Endpoint for Server
         let next = Next::new(endpoint, middleware);
 
         next.run(ctx).await
-    }
-}
-
-#[async_trait::async_trait]
-impl http_client::HttpClient for Server {
-    async fn send(&self, req: crate::http::Request) -> crate::http::Result<crate::http::Response> {
-        self.respond(req).await
     }
 }
 
