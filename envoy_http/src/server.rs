@@ -3,6 +3,8 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use hyper::{Uri, Method};
+
 use crate::middleware::{Middleware, Next};
 use crate::router::{Router, Selection};
 use crate::{Endpoint, Route};
@@ -155,8 +157,7 @@ impl Server {
     }
 
     /// Start the server.
-    pub async fn listen(self, port: u16) -> Result<(), crate::Error> {
-        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    pub async fn listen(self, addr: SocketAddr) -> Result<(), crate::Error> {
 
         let make_svc = hyper::service::make_service_fn(move |_conn|{
             let server = self.clone();
@@ -193,8 +194,8 @@ impl Clone for Server {
 impl Endpoint for Server
 {
     async fn call(&self, ctx: &mut crate::Context) -> crate::Result {
-        let path = ctx.req.uri().path().to_owned();
-        let method = ctx.req.method().to_owned();
+        let path = ctx.borrow::<Uri>().path();
+        let method = ctx.borrow::<Method>().to_owned();
         let router = self.router.clone();
         let middleware = self.middleware.clone();
 

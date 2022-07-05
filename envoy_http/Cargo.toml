@@ -1,6 +1,6 @@
 [package]
 name = "envoy_http"
-version = "0.0.9"
+version = "0.2.2"
 description = "A minimal and pragmatic Rust web application framework built for rapid development"
 documentation = "https://docs.rs/envoy_http"
 keywords = ["envoy", "http", "web", "framework", "async"]

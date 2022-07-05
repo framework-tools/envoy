@@ -216,8 +216,10 @@ impl Endpoint for StripPrefixEndpoint
             .find_map(|captures| captures.wildcard())
             .unwrap_or_default();
 
-        *ctx.req.uri_mut() = Uri::from_str(rest)
+        let uri = Uri::from_str(rest)
             .map_err(|err| anyhow::anyhow!("InvalidUri: {:#?}", err))?;
+
+        ctx.insert(uri);
 
         self.0
             .call(ctx)
